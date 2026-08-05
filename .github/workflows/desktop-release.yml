@@ -1,0 +1,181 @@
+name: Desktop Release (Windows / macOS / Linux)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（留空自动使用上游最新版）"
+        required: false
+        default: ""
+  schedule:
+    # 每天北京时间 08:00 (UTC 00:00) 自动检测上游更新
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  build-desktop:
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: ubuntu-24.04
+            name: linux
+            kernel_path: "../app/kernel-linux/SiYuan-Kernel"
+            build_args_prefix: "-s -w -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist-linux"
+            goos: "linux"
+            goarch: "amd64"
+            suffix: "linux"
+          - os: macos-latest
+            name: macos
+            kernel_path: "../app/kernel-darwin/SiYuan-Kernel"
+            build_args_prefix: "-s -w -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist-darwin"
+            goos: "darwin"
+            goarch: "amd64"
+            suffix: "mac.dmg"
+          - os: macos-latest
+            name: macos-arm64
+            kernel_path: "../app/kernel-darwin-arm64/SiYuan-Kernel"
+            build_args_prefix: "-s -w -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist-darwin-arm64"
+            goos: "darwin"
+            goarch: "arm64"
+            suffix: "mac-arm64.dmg"
+          - os: windows-latest
+            name: windows
+            kernel_path: "../app/kernel/SiYuan-Kernel.exe"
+            build_args_prefix: "-s -w -H=windowsgui -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist"
+            goos: "windows"
+            goarch: "amd64"
+            suffix: "win.exe"
+
+    steps:
+      - name: Determine Siyuan Version
+        id: check_ver
+        shell: bash
+        run: |
+          INPUT_VER="${{ github.event.inputs.version }}"
+          if [ -z "$INPUT_VER" ]; then
+            LATEST_TAG=$(wget -qO- -t3 -T30 "https://api.github.com/repos/siyuan-note/siyuan/releases/latest" | grep "\"tag_name\"" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+            echo "Auto-detected latest official version: ${LATEST_TAG}"
+            VERSION="${LATEST_TAG}"
+          else
+            echo "Using specified version: ${INPUT_VER}"
+            VERSION="${INPUT_VER}"
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+
+          # 检查本仓库 Releases 是否已存在对应的 -unlock 版本
+          TARGET_TAG="${VERSION}-unlock"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TARGET_TAG}")
+          if [ "$HTTP_STATUS" -eq 200 ] && [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "上游最新版本 ${VERSION} (${TARGET_TAG}) 已构建发布过，跳过本次定时构建。"
+            echo "SHOULD_SKIP=true" >> $GITHUB_ENV
+          else
+            echo "SHOULD_SKIP=false" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout sy-build repository
+        if: env.SHOULD_SKIP != 'true'
+        uses: actions/checkout@v4
+        with:
+          path: sy-build
+
+      - name: Checkout official siyuan-note/siyuan
+        if: env.SHOULD_SKIP != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: siyuan-note/siyuan
+          ref: ${{ env.VERSION }}
+          path: siyuan
+
+      - name: Apply unlock patches
+        if: env.SHOULD_SKIP != 'true'
+        working-directory: ${{ github.workspace }}/siyuan
+        shell: bash
+        run: |
+          git apply ../sy-build/patches/siyuan/disable-update.patch
+          git apply ../sy-build/patches/siyuan/default-config.patch
+          git apply ../sy-build/patches/siyuan/mock-vip-user.patch
+          git apply ../sy-build/patches/siyuan/hide-account-entry.patch
+          echo "Patches applied successfully."
+
+      - name: Set up Go
+        if: env.SHOULD_SKIP != 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ github.workspace }}/siyuan/kernel/go.mod
+          cache-dependency-path: ${{ github.workspace }}/siyuan/kernel/go.sum
+          cache: true
+
+      - name: Set up goversioninfo (Windows)
+        if: "env.SHOULD_SKIP != 'true' && contains( matrix.config.goos, 'windows')"
+        working-directory: ${{ github.workspace }}/siyuan/kernel
+        run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+
+      - name: Set up Node
+        if: env.SHOULD_SKIP != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        if: env.SHOULD_SKIP != 'true'
+        working-directory: ${{ github.workspace }}/siyuan/app
+        shell: bash
+        run: |
+          packageManager=$(jq -r '.packageManager' package.json)
+          npm install -g $packageManager
+
+      - name: Build UI
+        if: env.SHOULD_SKIP != 'true'
+        working-directory: ${{ github.workspace }}/siyuan/app
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm run install:electron
+          pnpm run build
+
+      - name: Generate Icon Resource (Windows)
+        if: "env.SHOULD_SKIP != 'true' && contains( matrix.config.goos, 'windows')"
+        working-directory: ${{ github.workspace }}/siyuan/kernel
+        shell: cmd
+        run: goversioninfo -platform-specific=true -icon="resource\icon.ico" -manifest="resource\goversioninfo.exe.manifest"
+
+      - name: Build Kernel
+        if: env.SHOULD_SKIP != 'true'
+        working-directory: ${{ github.workspace }}/siyuan/kernel
+        shell: bash
+        env:
+          GO111MODULE: on
+          CGO_ENABLED: 1
+          GOOS: ${{ matrix.config.goos }}
+          GOARCH: ${{ matrix.config.goarch }}
+        run: |
+          go build -tags "fts5 sqlcipher" -o "${{ matrix.config.kernel_path }}" -ldflags "${{ matrix.config.build_args_prefix }} github.com/siyuan-note/siyuan/kernel/util.${{ matrix.config.build_args_suffix }}"
+
+      - name: Install RPM tools (Linux)
+        if: "env.SHOULD_SKIP != 'true' && matrix.config.goos == 'linux'"
+        run: sudo apt-get install -y rpm
+
+      - name: Build Electron App
+        if: env.SHOULD_SKIP != 'true'
+        working-directory: ${{ github.workspace }}/siyuan/app
+        run: pnpm run ${{ matrix.config.electron_args }}
+
+      - name: Release Desktop Packages
+        if: env.SHOULD_SKIP != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}-unlock
+          name: "Siyuan Unlock ${{ env.VERSION }}"
+          append_body: true
+          files: ${{ github.workspace }}/siyuan/app/build/siyuan-*

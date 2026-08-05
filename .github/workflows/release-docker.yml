@@ -1,0 +1,73 @@
+name: Release Docker Tarball
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "构建版本号（留空全自动打最新版）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Siyuan Version
+        shell: bash
+        run: |
+          INPUT_VER="${{ github.event.inputs.version }}"
+          if [ -z "$INPUT_VER" ]; then
+            LATEST_TAG=$(wget -qO- -t3 -T30 "https://api.github.com/repos/siyuan-note/siyuan/releases/latest" | grep "\"tag_name\"" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+            echo "Auto-detected latest official version: ${LATEST_TAG}"
+            echo "VERSION=${LATEST_TAG}" >> $GITHUB_ENV
+          else
+            echo "Using specified version: ${INPUT_VER}"
+            echo "VERSION=${INPUT_VER}" >> $GITHUB_ENV
+          fi
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Checkout sy-build repository
+        uses: actions/checkout@v4
+        with:
+          path: sy-build
+
+      - name: clone origin and apply patches
+        run: |
+          git clone --branch ${{ env.VERSION }} --depth=1 https://github.com/siyuan-note/siyuan.git
+          cd siyuan
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Export Docker Tarball
+        working-directory: ${{ github.workspace }}/siyuan
+        run: |
+          docker buildx build --platform linux/amd64 -t b3log/siyuan:${{ env.VERSION }} --output type=docker,dest=${{ github.workspace }}/siyuan-${{ env.VERSION }}-docker.tar .
+
+      - name: Release Docker Tarball
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}-unlock
+          name: "Siyuan Unlock ${{ env.VERSION }}"
+          append_body: true
+          files: ${{ github.workspace }}/siyuan-*-docker.tar
