@@ -49,4 +49,5 @@ yarn.lock
 *.p12
 *.bak
 siyuan_keystore_base64.txt
+ANDROID_KEYSTORE_INFO.txt
 temp_siyuan/
