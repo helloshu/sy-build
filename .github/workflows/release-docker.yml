@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "构建版本号（留空全自动打最新版）"
+        description: "版本号（留空自动使用上游最新版）"
         required: false
         default: ""
 
@@ -20,7 +20,7 @@ jobs:
         run: |
           INPUT_VER="${{ github.event.inputs.version }}"
           if [ -z "$INPUT_VER" ]; then
-            LATEST_TAG=$(wget -qO- -t3 -T30 "https://api.github.com/repos/siyuan-note/siyuan/releases/latest" | grep "\"tag_name\"" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+            LATEST_TAG=$(curl -s https://api.github.com/repos/siyuan-note/siyuan/releases/latest | grep "\"tag_name\"" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
             echo "Auto-detected latest official version: ${LATEST_TAG}"
             echo "VERSION=${LATEST_TAG}" >> $GITHUB_ENV
           else
