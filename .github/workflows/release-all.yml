@@ -366,11 +366,11 @@ jobs:
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_ENTITLEMENTS = .*/CODE_SIGN_ENTITLEMENTS = "";/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/DEVELOPMENT_TEAM/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/CODE_SIGN_ENTITLEMENTS/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "";/g' siyuan-ios.xcodeproj/project.pbxproj || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
