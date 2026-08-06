@@ -276,16 +276,20 @@ jobs:
           CGO_ENABLED: 1
 
       - name: android assets
-        working-directory: ${{ github.workspace }}/siyuan/app/
+        shell: bash
         run: |
-          zip -r ${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip ./appearance ./guide ./stage ./changelogs
+          mkdir -p ${{ github.workspace }}/siyuan-android/app/src/main/assets/
+          cd ${{ github.workspace }}/siyuan/app
+          zip -r ${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip ./appearance ./guide ./stage
+          cd ${{ github.workspace }}/siyuan
+          if [ -d "changelogs" ]; then
+            zip -rg ${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip ./changelogs
+          fi
 
       - name: Decode Keystore
         id: decode_keystore
-        if: env.KEYSTORE != ''
+        if: "${{ secrets.KEYSTORE != '' }}"
         uses: timheuer/base64-to-file@v1.2
-        env:
-          KEYSTORE: ${{ secrets.KEYSTORE }}
         with:
           fileName: "siyuan.jks"
           fileDir: ${{ github.workspace }}/siyuan-android/keystore
@@ -401,7 +405,10 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan/app/
         run: |
           mkdir -p ${{ github.workspace }}/siyuan-ios/app/
-          cp -r ./appearance ./guide ./stage ./changelogs ${{ github.workspace }}/siyuan-ios/app/
+          cp -r ./appearance ./guide ./stage ${{ github.workspace }}/siyuan-ios/app/
+          if [ -d "../changelogs" ]; then
+            cp -r ../changelogs ${{ github.workspace }}/siyuan-ios/app/ || true
+          fi
 
       - name: Building iOS ipa (Unsigned Mode)
         working-directory: ${{ github.workspace }}/siyuan-ios
