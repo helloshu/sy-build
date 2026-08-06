@@ -47,7 +47,7 @@ index 3eee686..af77417 100644
              minifyEnabled true
              shrinkResources true
 diff --git a/build.gradle b/build.gradle
-index afab62d..3577c89 100644
+index afab62d..759f89e 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -5,11 +5,11 @@ buildscript {
@@ -64,17 +64,3 @@ index afab62d..3577c89 100644
      }
      dependencies {
          classpath 'com.android.tools.build:gradle:9.1.0'
-@@ -23,11 +23,10 @@ allprojects {
-     repositories {
-         // 阿里云 Maven 中央仓库下载源
-         // https://developer.aliyun.com/mvn/guide?spm=a2c6h.13651104.0.0.435836a4Lghjtb
--        maven { url 'https://maven.aliyun.com/repository/google' }
--        maven { url 'https://maven.aliyun.com/repository/public' }
--
-         google()
-         mavenCentral()
-+        maven { url 'https://maven.aliyun.com/repository/google' }
-+        maven { url 'https://maven.aliyun.com/repository/public'
-         maven { url 'https://jitpack.io' }
-     }
- }
