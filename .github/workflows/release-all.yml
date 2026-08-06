@@ -221,12 +221,12 @@ jobs:
 
           git apply --ignore-whitespace --verbose ${{ github.workspace }}/sy-build/patches/siyuan-android/debug-build.patch
           python3 -c '
-with open("build.gradle", "r", encoding="utf-8") as f:
-    lines = f.readlines()
-lines = [l for l in lines if "aliyun" not in l.lower()]
-with open("build.gradle", "w", encoding="utf-8") as f:
-    f.writelines(lines)
-' || true
+          with open("build.gradle", "r", encoding="utf-8") as f:
+              lines = f.readlines()
+          lines = [l for l in lines if "aliyun" not in l.lower()]
+          with open("build.gradle", "w", encoding="utf-8") as f:
+              f.writelines(lines)
+          ' || true
 
           mkdir -p app/src/main/assets/
           mkdir -p app/libs/
@@ -373,20 +373,20 @@ with open("build.gradle", "w", encoding="utf-8") as f:
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
           python3 -c '
-with open("siyuan-ios.xcodeproj/project.pbxproj", "r", encoding="utf-8") as f:
-    c = f.read()
+          with open("siyuan-ios.xcodeproj/project.pbxproj", "r", encoding="utf-8") as f:
+              c = f.read()
 
-c = c.replace("PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;", "CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;")
-c = c.replace("PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;", "CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;")
-c = c.replace("CODE_SIGN_STYLE = Automatic;", "CODE_SIGN_STYLE = Manual;")
-c = c.replace("CODE_SIGN_IDENTITY = \"Apple Development\";", "CODE_SIGN_IDENTITY = \"\";")
+          c = c.replace("PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;", "CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;")
+          c = c.replace("PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;", "CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;")
+          c = c.replace("CODE_SIGN_STYLE = Automatic;", "CODE_SIGN_STYLE = Manual;")
+          c = c.replace("CODE_SIGN_IDENTITY = \"Apple Development\";", "CODE_SIGN_IDENTITY = \"\";")
 
-lines = [l for l in c.splitlines() if not any(k in l for k in ["DEVELOPMENT_TEAM", "PROVISIONING_PROFILE_SPECIFIER", "CODE_SIGN_ENTITLEMENTS"])]
-final_c = "\n".join(lines)
+          lines = [l for l in c.splitlines() if not any(k in l for k in ["DEVELOPMENT_TEAM", "PROVISIONING_PROFILE_SPECIFIER", "CODE_SIGN_ENTITLEMENTS"])]
+          final_c = "\n".join(lines)
 
-with open("siyuan-ios.xcodeproj/project.pbxproj", "w", encoding="utf-8") as f:
-    f.write(final_c)
-' || true
+          with open("siyuan-ios.xcodeproj/project.pbxproj", "w", encoding="utf-8") as f:
+              f.write(final_c)
+          ' || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
