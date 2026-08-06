@@ -266,8 +266,12 @@ jobs:
       - name: Building Android Kernel
         run: |
           if [ -d "$ANDROID_HOME/ndk" ]; then
-            NDK_PATH=$(ls -d $ANDROID_HOME/ndk/* | tail -n 1)
+            NDK_PATH=$(ls -d $ANDROID_HOME/ndk/25* 2>/dev/null | tail -n 1)
+            if [ -z "$NDK_PATH" ]; then
+              NDK_PATH=$(ls -d $ANDROID_HOME/ndk/* | tail -n 1)
+            fi
             export ANDROID_NDK_HOME="$NDK_PATH"
+            echo "Using NDK: $ANDROID_NDK_HOME"
           fi
           gomobile bind --tags fts5 -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
