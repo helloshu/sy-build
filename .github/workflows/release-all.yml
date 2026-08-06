@@ -372,8 +372,14 @@ with open('build.gradle', 'w', encoding='utf-8') as f:
             cp -r Assets.xcassets/AppIcon.appiconset Assets.xcassets/logo.appiconset || true
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;/CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;/CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          python3 -c "
+with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
+    c = f.read()
+c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;')
+c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;')
+with open('siyuan-ios.xcodeproj/project.pbxproj', 'w', encoding='utf-8') as f:
+    f.write(c)
+" || true
           sed -i '' '/DEVELOPMENT_TEAM/d' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' '/CODE_SIGN_ENTITLEMENTS/d' siyuan-ios.xcodeproj/project.pbxproj || true
