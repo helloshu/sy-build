@@ -432,7 +432,7 @@ jobs:
             SCHEME_NAME="siyuan-ios"
           fi
           echo "Detected Xcode Scheme: ${SCHEME_NAME}"
-          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" -derivedDataPath ../siyuan-ios-out
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath ../siyuan-ios-out
           APP_PATH=$(find ../siyuan-ios-out/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
           echo "Found compiled app at: ${APP_PATH}"
           mv "$APP_PATH" ../siyuan-ios-out/Payload/
