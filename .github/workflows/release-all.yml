@@ -265,6 +265,14 @@ jobs:
 
       - name: Building Android Kernel
         run: |
+          if [ -d "$ANDROID_HOME/ndk" ]; then
+            NDK_PATH=$(ls -d $ANDROID_HOME/ndk/25* 2>/dev/null | tail -n 1)
+            if [ -z "$NDK_PATH" ]; then
+              NDK_PATH=$(ls -d $ANDROID_HOME/ndk/* | tail -n 1)
+            fi
+            export ANDROID_NDK_HOME="$NDK_PATH"
+            echo "Using NDK: $ANDROID_NDK_HOME"
+          fi
           gomobile bind --tags fts5 -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         env:
@@ -304,7 +312,7 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan-android
         run: |
           chmod 777 ./gradlew
-          ./gradlew :app:assembleRelease
+          ./gradlew :app:assembleOfficialRelease -x lint -x lintVitalRelease -x test
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
 
@@ -312,7 +320,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/googleplay/release/siyuan-*.apk
+          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/official/release/siyuan-*.apk
 
   build-ios:
     needs: check-version
@@ -358,6 +366,11 @@ jobs:
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/DEVELOPMENT_TEAM/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/CODE_SIGN_ENTITLEMENTS/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/CODE_SIGN_IDENTITY/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/CODE_SIGN_STYLE/d' siyuan-ios.xcodeproj/project.pbxproj || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -414,7 +427,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO -derivedDataPath ../siyuan-ios-out
+          SCHEME_NAME=$(xcodebuild -list -project ./siyuan-ios.xcodeproj | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
+          if [ -z "$SCHEME_NAME" ]; then
+            SCHEME_NAME="siyuan-ios"
+          fi
+          echo "Detected Xcode Scheme: ${SCHEME_NAME}"
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES -derivedDataPath ../siyuan-ios-out
           APP_PATH=$(find ../siyuan-ios-out/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
           echo "Found compiled app at: ${APP_PATH}"
           mv "$APP_PATH" ../siyuan-ios-out/Payload/
