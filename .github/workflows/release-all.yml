@@ -1,0 +1,461 @@
+name: Release All Platforms (Desktop / Android / iOS / Docker)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（留空自动使用上游最新版）"
+        required: false
+        default: ""
+  schedule:
+    # 每天北京时间 08:00 (UTC 00:00) 自动检测上游更新
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check_ver.outputs.version }}
+      should_skip: ${{ steps.check_ver.outputs.should_skip }}
+    steps:
+      - name: Determine Siyuan Version
+        id: check_ver
+        shell: bash
+        run: |
+          INPUT_VER="${{ github.event.inputs.version }}"
+          if [ -z "$INPUT_VER" ]; then
+            LATEST_TAG=$(curl -s https://api.github.com/repos/siyuan-note/siyuan/releases/latest | grep "\"tag_name\"" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+            echo "Auto-detected latest official version: ${LATEST_TAG}"
+            VERSION="${LATEST_TAG}"
+          else
+            echo "Using specified version: ${INPUT_VER}"
+            VERSION="${INPUT_VER}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+          # 检查本仓库 Releases 是否已存在对应的 -unlock 版本
+          TARGET_TAG="${VERSION}-unlock"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TARGET_TAG}")
+          if [ "$HTTP_STATUS" -eq 200 ] && [ "${{ github.event_name }}" == "schedule" ]; then
+            echo "上游最新版本 ${VERSION} (${TARGET_TAG}) 已构建发布过，跳过本次定时构建。"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-desktop:
+    needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: ubuntu-24.04
+            name: linux
+            kernel_path: "../app/kernel-linux/SiYuan-Kernel"
+            build_args_prefix: "-s -w -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist-linux"
+            goos: "linux"
+            goarch: "amd64"
+            artifact_name: "desktop-linux"
+          - os: macos-latest
+            name: macos
+            kernel_path: "../app/kernel-darwin/SiYuan-Kernel"
+            build_args_prefix: "-s -w -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist-darwin"
+            goos: "darwin"
+            goarch: "amd64"
+            artifact_name: "desktop-macos"
+          - os: macos-latest
+            name: macos-arm64
+            kernel_path: "../app/kernel-darwin-arm64/SiYuan-Kernel"
+            build_args_prefix: "-s -w -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist-darwin-arm64"
+            goos: "darwin"
+            goarch: "arm64"
+            artifact_name: "desktop-macos-arm64"
+          - os: windows-latest
+            name: windows
+            kernel_path: "../app/kernel/SiYuan-Kernel.exe"
+            build_args_prefix: "-s -w -H=windowsgui -X"
+            build_args_suffix: "Mode=prod"
+            electron_args: "dist"
+            goos: "windows"
+            goarch: "amd64"
+            artifact_name: "desktop-windows"
+
+    steps:
+      - name: Checkout sy-build repository
+        uses: actions/checkout@v4
+        with:
+          path: sy-build
+
+      - name: Checkout official siyuan-note/siyuan
+        uses: actions/checkout@v4
+        with:
+          repository: siyuan-note/siyuan
+          ref: ${{ needs.check-version.outputs.version }}
+          path: siyuan
+
+      - name: Apply unlock patches
+        working-directory: ${{ github.workspace }}/siyuan
+        shell: bash
+        run: |
+          git apply ../sy-build/patches/siyuan/disable-update.patch
+          git apply ../sy-build/patches/siyuan/default-config.patch
+          git apply ../sy-build/patches/siyuan/mock-vip-user.patch
+          git apply ../sy-build/patches/siyuan/hide-account-entry.patch
+          echo "Patches applied successfully."
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ github.workspace }}/siyuan/kernel/go.mod
+          cache-dependency-path: ${{ github.workspace }}/siyuan/kernel/go.sum
+          cache: true
+
+      - name: Set up goversioninfo (Windows)
+        if: "contains( matrix.config.goos, 'windows')"
+        working-directory: ${{ github.workspace }}/siyuan/kernel
+        run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        working-directory: ${{ github.workspace }}/siyuan/app
+        shell: bash
+        run: |
+          packageManager=$(jq -r '.packageManager' package.json)
+          npm install -g $packageManager
+
+      - name: Build UI
+        working-directory: ${{ github.workspace }}/siyuan/app
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm run install:electron
+          pnpm run build
+
+      - name: Generate Icon Resource (Windows)
+        if: "contains( matrix.config.goos, 'windows')"
+        working-directory: ${{ github.workspace }}/siyuan/kernel
+        shell: cmd
+        run: goversioninfo -platform-specific=true -icon="resource\icon.ico" -manifest="resource\goversioninfo.exe.manifest"
+
+      - name: Build Kernel
+        working-directory: ${{ github.workspace }}/siyuan/kernel
+        shell: bash
+        env:
+          GO111MODULE: on
+          CGO_ENABLED: 1
+          GOOS: ${{ matrix.config.goos }}
+          GOARCH: ${{ matrix.config.goarch }}
+        run: |
+          go build -tags "fts5 sqlcipher" -o "${{ matrix.config.kernel_path }}" -ldflags "${{ matrix.config.build_args_prefix }} github.com/siyuan-note/siyuan/kernel/util.${{ matrix.config.build_args_suffix }}"
+
+      - name: Install RPM tools (Linux)
+        if: matrix.config.goos == 'linux'
+        run: sudo apt-get install -y rpm
+
+      - name: Build Electron App
+        working-directory: ${{ github.workspace }}/siyuan/app
+        run: pnpm run ${{ matrix.config.electron_args }}
+
+      - name: Upload Desktop Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.config.artifact_name }}
+          path: ${{ github.workspace }}/siyuan/app/build/siyuan-*
+
+  build-android:
+    needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout sy-build repository
+        uses: actions/checkout@v4
+        with:
+          path: sy-build
+
+      - name: clone origin and apply patches
+        run: |
+          mkdir -p ${{ github.workspace }}/go
+          cd ${{ github.workspace }}
+
+          git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
+          cd siyuan
+
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+
+          cd ..
+
+          git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan-android.git
+          cd siyuan-android
+
+          git apply --ignore-whitespace --verbose ${{ github.workspace }}/sy-build/patches/siyuan-android/debug-build.patch
+
+          mkdir -p app/src/main/assets/
+          mkdir -p app/libs/
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ github.workspace }}/siyuan/kernel/go.mod
+          cache-dependency-path: ${{ github.workspace }}/siyuan/kernel/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        working-directory: ${{ github.workspace }}/siyuan/app
+        shell: bash
+        run: |
+          packageManager=$(jq -r '.packageManager' package.json)
+          npm install -g $packageManager
+
+      - name: Install Node Dependencies
+        run: pnpm install --no-frozen-lockfile
+        working-directory: ${{ github.workspace }}/siyuan/app
+
+      - name: Building UI
+        run: pnpm run build
+        working-directory: ${{ github.workspace }}/siyuan/app
+
+      - name: gomobile
+        working-directory: ${{ github.workspace }}/go
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Set up java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+          cache: "gradle"
+
+      - name: Building Android Kernel
+        run: |
+          gomobile bind --tags fts5 -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
+        working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
+        env:
+          GO111MODULE: on
+          CGO_ENABLED: 1
+
+      - name: android assets
+        working-directory: ${{ github.workspace }}/siyuan/app/
+        run: |
+          zip -r ${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip ./appearance ./guide ./stage ./changelogs
+
+      - name: Decode Keystore
+        id: decode_keystore
+        if: env.KEYSTORE != ''
+        uses: timheuer/base64-to-file@v1.2
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+        with:
+          fileName: "siyuan.jks"
+          fileDir: ${{ github.workspace }}/siyuan-android/keystore
+          encodedString: ${{ secrets.KEYSTORE }}
+
+      - name: Generate Fallback Keystore if missing
+        run: |
+          if [ ! -f "${{ github.workspace }}/siyuan-android/keystore/siyuan.jks" ]; then
+            mkdir -p ${{ github.workspace }}/siyuan-android/keystore
+            keytool -genkey -v -keystore ${{ github.workspace }}/siyuan-android/keystore/siyuan.jks -alias siyuan -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SiYuan, OU=Dev, O=SiYuan, L=City, S=State, C=US"
+          fi
+
+      - name: Building Android
+        working-directory: ${{ github.workspace }}/siyuan-android
+        run: |
+          chmod 777 ./gradlew
+          ./gradlew :app:assembleRelease
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
+
+      - name: Upload Android Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/googleplay/release/siyuan-*.apk
+
+  build-ios:
+    needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout sy-build repository
+        uses: actions/checkout@v4
+        with:
+          path: sy-build
+
+      - name: Checkout official siyuan-note/siyuan
+        uses: actions/checkout@v4
+        with:
+          repository: siyuan-note/siyuan
+          ref: ${{ needs.check-version.outputs.version }}
+          path: siyuan
+
+      - name: Checkout official siyuan-note/siyuan-ios
+        uses: actions/checkout@v4
+        with:
+          repository: siyuan-note/siyuan-ios
+          path: siyuan-ios
+
+      - name: Apply unlock patches
+        working-directory: ${{ github.workspace }}/siyuan
+        shell: bash
+        run: |
+          git apply ../sy-build/patches/siyuan/disable-update.patch
+          git apply ../sy-build/patches/siyuan/default-config.patch
+          git apply ../sy-build/patches/siyuan/mock-vip-user.patch
+          git apply ../sy-build/patches/siyuan/hide-account-entry.patch
+          echo "Patches applied successfully."
+
+      - name: Fix iOS AppIcon (Temporary fix)
+        working-directory: ${{ github.workspace }}/siyuan-ios
+        run: |
+          cp -r siyuan-ios/Assets.xcassets/AppIcon.appiconset siyuan-ios/Assets.xcassets/logo.appiconset || true
+          sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ github.workspace }}/siyuan/kernel/go.mod
+          cache-dependency-path: ${{ github.workspace }}/siyuan/kernel/go.sum
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        working-directory: ${{ github.workspace }}/siyuan/app
+        shell: bash
+        run: |
+          packageManager=$(jq -r '.packageManager' package.json)
+          npm install -g $packageManager
+
+      - name: Build UI
+        working-directory: ${{ github.workspace }}/siyuan/app
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm run build
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+
+      - name: Building ios Kernel
+        working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
+        run: |
+          mkdir -p ../ios
+          gomobile bind --tags fts5 -ldflags '-s -w' -v -target=ios -o "../ios/iosk.xcframework" ./
+          cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/ || true
+        env:
+          GO111MODULE: on
+          CGO_ENABLED: 1
+
+      - name: iOS Assets
+        working-directory: ${{ github.workspace }}/siyuan/app/
+        run: |
+          mkdir -p ${{ github.workspace }}/siyuan-ios/app/
+          cp -r ./appearance ./guide ./stage ./changelogs ${{ github.workspace }}/siyuan-ios/app/
+
+      - name: Building iOS ipa (Unsigned Mode)
+        working-directory: ${{ github.workspace }}/siyuan-ios
+        run: |
+          mkdir -p ../siyuan-ios-out/Payload
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme siyuan-ios -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
+          mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload
+          cd ../siyuan-ios-out
+          zip -r Payload.zip Payload
+          mv Payload.zip siyuan-${{ needs.check-version.outputs.version }}-ios.ipa
+
+      - name: Upload iOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: ${{ github.workspace }}/siyuan-ios-out/siyuan-*-ios.ipa
+
+  build-docker:
+    needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sy-build repository
+        uses: actions/checkout@v4
+        with:
+          path: sy-build
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: clone origin and apply patches
+        run: |
+          git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
+          cd siyuan
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
+          git apply ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Export Docker Tarball
+        working-directory: ${{ github.workspace }}/siyuan
+        run: |
+          docker buildx build --platform linux/amd64 -t b3log/siyuan:${{ needs.check-version.outputs.version }} --output type=docker,dest=${{ github.workspace }}/siyuan-${{ needs.check-version.outputs.version }}-docker.tar .
+
+      - name: Upload Docker Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-tarball
+          path: ${{ github.workspace }}/siyuan-*-docker.tar
+
+  release-all:
+    needs: [check-version, build-desktop, build-android, build-ios, build-docker]
+    if: always() && needs.check-version.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Release All Platform Packages
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.version }}-unlock
+          name: "Siyuan Unlock ${{ needs.check-version.outputs.version }}"
+          append_body: true
+          files: release-artifacts/**/*
