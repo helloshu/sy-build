@@ -288,7 +288,7 @@ jobs:
 
       - name: Decode Keystore
         id: decode_keystore
-        if: "${{ secrets.KEYSTORE != '' }}"
+        if: secrets.KEYSTORE != ''
         uses: timheuer/base64-to-file@v1.2
         with:
           fileName: "siyuan.jks"
