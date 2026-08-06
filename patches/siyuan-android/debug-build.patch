@@ -6,22 +6,26 @@ index e0ec580..93c1c43 100644
  
  // 多渠道打包配置
  apply from: rootProject.file('flavors.gradle')
--apply from: rootProject.file('signings.gradle')
-+//apply from: rootProject.file('signings.gradle')
- apply from: rootProject.file('buildRelease.gradle')
+-//apply from: rootProject.file('signings.gradle')
++apply from: rootProject.file('buildRelease.gradle')
  
  // 1. 配置 App Bundle (.aab) 的基础文件名
-@@ -45,7 +45,14 @@ android {
+@@ -45,7 +45,19 @@ android {
          versionCode siyuanVersionCode
          versionName siyuanVersionName
      }
 -
 +    signingConfigs {
 +        release {
-+            storeFile = file("../keystore/siyuan.jks")
-+            storePassword System.getenv("KEYSTORE_PASSWORD")
-+            keyAlias "siyuan"
-+            keyPassword System.getenv("KEYSTORE_PASSWORD")
++            def ksFile = file("../keystore/siyuan.jks")
++            if (ksFile.exists()) {
++                storeFile = ksFile
++                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "123456"
++                keyAlias = "siyuan"
++                keyPassword = System.getenv("KEYSTORE_PASSWORD") ?: "123456"
++            } else {
++                initWith(signingConfigs.debug)
++            }
 +        }
 +    }
      buildFeatures {
