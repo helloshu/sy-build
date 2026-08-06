@@ -134,7 +134,7 @@ jobs:
           cache: true
 
       - name: Set up goversioninfo (Windows)
-        if: "contains( matrix.config.goos, 'windows')"
+        if: matrix.config.goos == 'windows'
         working-directory: ${{ github.workspace }}/siyuan/kernel
         run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
 
@@ -158,7 +158,7 @@ jobs:
           pnpm run build
 
       - name: Generate Icon Resource (Windows)
-        if: "contains( matrix.config.goos, 'windows')"
+        if: matrix.config.goos == 'windows'
         working-directory: ${{ github.workspace }}/siyuan/kernel
         shell: cmd
         run: goversioninfo -platform-specific=true -icon="resource\icon.ico" -manifest="resource\goversioninfo.exe.manifest"
@@ -288,7 +288,9 @@ jobs:
 
       - name: Decode Keystore
         id: decode_keystore
-        if: secrets.KEYSTORE != ''
+        if: env.KEYSTORE != ''
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
         uses: timheuer/base64-to-file@v1.2
         with:
           fileName: "siyuan.jks"
