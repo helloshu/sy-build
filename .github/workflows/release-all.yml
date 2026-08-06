@@ -308,7 +308,7 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan-android
         run: |
           chmod 777 ./gradlew
-          ./gradlew :app:assembleGoogleplayRelease -x lint -x lintVitalRelease -x test
+          ./gradlew :app:assembleOfficialRelease -x lint -x lintVitalRelease -x test
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
 
@@ -316,7 +316,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/googleplay/release/siyuan-*.apk
+          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/official/release/siyuan-*.apk
 
   build-ios:
     needs: check-version
