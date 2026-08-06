@@ -369,8 +369,8 @@ jobs:
           sed -i '' '/DEVELOPMENT_TEAM/d' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' '/CODE_SIGN_ENTITLEMENTS/d' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "";/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/CODE_SIGN_IDENTITY/d' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' '/CODE_SIGN_STYLE/d' siyuan-ios.xcodeproj/project.pbxproj || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -432,7 +432,7 @@ jobs:
             SCHEME_NAME="siyuan-ios"
           fi
           echo "Detected Xcode Scheme: ${SCHEME_NAME}"
-          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -derivedDataPath ../siyuan-ios-out
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES -derivedDataPath ../siyuan-ios-out
           APP_PATH=$(find ../siyuan-ios-out/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
           echo "Found compiled app at: ${APP_PATH}"
           mv "$APP_PATH" ../siyuan-ios-out/Payload/
