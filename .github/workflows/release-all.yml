@@ -412,10 +412,18 @@ jobs:
 
       - name: Building iOS ipa (Unsigned Mode)
         working-directory: ${{ github.workspace }}/siyuan-ios
+        shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          xcodebuild -project ./siyuan-ios.xcodeproj -scheme siyuan-ios -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
-          mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload
+          SCHEME_NAME=$(xcodebuild -list -project ./siyuan-ios.xcodeproj | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
+          if [ -z "$SCHEME_NAME" ]; then
+            SCHEME_NAME="siyuan-ios"
+          fi
+          echo "Detected Xcode Scheme: ${SCHEME_NAME}"
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Manual -derivedDataPath ../siyuan-ios-out
+          APP_PATH=$(find ../siyuan-ios-out/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
+          echo "Found compiled app at: ${APP_PATH}"
+          mv "$APP_PATH" ../siyuan-ios-out/Payload/
           cd ../siyuan-ios-out
           zip -r Payload.zip Payload
           mv Payload.zip siyuan-${{ needs.check-version.outputs.version }}-ios.ipa
