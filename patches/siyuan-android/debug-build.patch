@@ -46,21 +46,3 @@ index 3eee686..af77417 100644
  
              minifyEnabled true
              shrinkResources true
-diff --git a/build.gradle b/build.gradle
-index afab62d..759f89e 100644
---- a/build.gradle
-+++ b/build.gradle
-@@ -5,11 +5,11 @@ buildscript {
-         siyuanVersionName = "3.8.0-alpha.3"
-     }
-     repositories {
-+        google()
-+        mavenCentral()
-         maven { url 'https://maven.aliyun.com/repository/google' }
-         maven { url 'https://maven.aliyun.com/repository/public' }
-         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
--        google()
--        mavenCentral()
-     }
-     dependencies {
-         classpath 'com.android.tools.build:gradle:9.1.0'

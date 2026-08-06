@@ -220,6 +220,13 @@ jobs:
           cd siyuan-android
 
           git apply --ignore-whitespace --verbose ${{ github.workspace }}/sy-build/patches/siyuan-android/debug-build.patch
+          python -c "
+with open('build.gradle', 'r', encoding='utf-8') as f:
+    lines = f.readlines()
+lines = [l for l in lines if 'aliyun' not in l.lower()]
+with open('build.gradle', 'w', encoding='utf-8') as f:
+    f.writelines(lines)
+" || true
 
           mkdir -p app/src/main/assets/
           mkdir -p app/libs/
