@@ -1,5 +1,5 @@
 diff --git a/app/build.gradle b/app/build.gradle
-index 3eee686..9fed006 100644
+index 3eee686..b1819b7 100644
 --- a/app/build.gradle
 +++ b/app/build.gradle
 @@ -5,7 +5,7 @@ plugins {
@@ -19,10 +19,10 @@ index 3eee686..9fed006 100644
 +        release {
 +            def ksFile = file("../keystore/siyuan.jks")
 +            if (ksFile.exists()) {
-+                storeFile = ksFile
-+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "123456"
-+                keyAlias = "siyuan"
-+                keyPassword = System.getenv("KEYSTORE_PASSWORD") ?: "123456"
++                storeFile ksFile
++                storePassword "123456"
++                keyAlias "siyuan"
++                keyPassword "123456"
 +            } else {
 +                initWith(signingConfigs.debug)
 +            }
