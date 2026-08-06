@@ -399,6 +399,7 @@ jobs:
           mkdir -p ../ios
           gomobile bind --tags fts5 -ldflags '-s -w' -v -target=ios -o "../ios/iosk.xcframework" ./
           cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/ || true
+          cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/siyuan-ios/ || true
         env:
           GO111MODULE: on
           CGO_ENABLED: 1
@@ -422,7 +423,7 @@ jobs:
             SCHEME_NAME="siyuan-ios"
           fi
           echo "Detected Xcode Scheme: ${SCHEME_NAME}"
-          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Manual -derivedDataPath ../siyuan-ios-out
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM="" CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER="" AD_HOC_CODE_SIGNING_ALLOWED=YES -derivedDataPath ../siyuan-ios-out
           APP_PATH=$(find ../siyuan-ios-out/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
           echo "Found compiled app at: ${APP_PATH}"
           mv "$APP_PATH" ../siyuan-ios-out/Payload/
