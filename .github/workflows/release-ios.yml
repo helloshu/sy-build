@@ -15,8 +15,11 @@ permissions:
   contents: write
 
 jobs:
-  build-ios:
-    runs-on: macos-latest
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check_ver.outputs.version }}
+      should_skip: ${{ steps.check_ver.outputs.should_skip }}
     steps:
       - name: Determine Siyuan Version
         id: check_ver
@@ -31,41 +34,42 @@ jobs:
             echo "Using specified version: ${INPUT_VER}"
             VERSION="${INPUT_VER}"
           fi
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
           # 检查本仓库 Releases 是否已存在对应的 -unlock 版本
           TARGET_TAG="${VERSION}-unlock"
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TARGET_TAG}")
           if [ "$HTTP_STATUS" -eq 200 ] && [ "${{ github.event_name }}" == "schedule" ]; then
             echo "上游最新版本 ${VERSION} (${TARGET_TAG}) 已构建发布过，跳过本次定时构建。"
-            echo "SHOULD_SKIP=true" >> $GITHUB_ENV
+            echo "should_skip=true" >> $GITHUB_OUTPUT
           else
-            echo "SHOULD_SKIP=false" >> $GITHUB_ENV
+            echo "should_skip=false" >> $GITHUB_OUTPUT
           fi
 
+  build-ios:
+    needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    runs-on: macos-latest
+    steps:
       - name: Checkout sy-build repository
-        if: env.SHOULD_SKIP != 'true'
         uses: actions/checkout@v4
         with:
           path: sy-build
 
       - name: Checkout official siyuan-note/siyuan
-        if: env.SHOULD_SKIP != 'true'
         uses: actions/checkout@v4
         with:
           repository: siyuan-note/siyuan
-          ref: ${{ env.VERSION }}
+          ref: ${{ needs.check-version.outputs.version }}
           path: siyuan
 
       - name: Checkout official siyuan-note/siyuan-ios
-        if: env.SHOULD_SKIP != 'true'
         uses: actions/checkout@v4
         with:
           repository: siyuan-note/siyuan-ios
           path: siyuan-ios
 
       - name: Apply unlock patches
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan
         shell: bash
         run: |
@@ -76,15 +80,13 @@ jobs:
           echo "Patches applied successfully."
 
       - name: Fix iOS AppIcon (Temporary fix)
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan-ios
         run: |
           cp -r siyuan-ios/Assets.xcassets/AppIcon.appiconset siyuan-ios/Assets.xcassets/logo.appiconset || true
-          sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ env.VERSION }};/g' siyuan-ios.xcodeproj/project.pbxproj
+          sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj
 
       - name: Set up Go
-        if: env.SHOULD_SKIP != 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: ${{ github.workspace }}/siyuan/kernel/go.mod
@@ -92,13 +94,11 @@ jobs:
           cache: true
 
       - name: Set up Node
-        if: env.SHOULD_SKIP != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install pnpm
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan/app
         shell: bash
         run: |
@@ -106,20 +106,17 @@ jobs:
           npm install -g $packageManager
 
       - name: Build UI
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan/app
         run: |
           pnpm install --no-frozen-lockfile
           pnpm run build
 
       - name: Install gomobile
-        if: env.SHOULD_SKIP != 'true'
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           gomobile init
 
       - name: Building ios Kernel
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         run: |
           mkdir -p ../ios
@@ -130,28 +127,25 @@ jobs:
           CGO_ENABLED: 1
 
       - name: iOS Assets
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan/app/
         run: |
           mkdir -p ${{ github.workspace }}/siyuan-ios/app/
           cp -r ./appearance ./guide ./stage ./changelogs ${{ github.workspace }}/siyuan-ios/app/
 
       - name: Building iOS ipa (Unsigned Mode)
-        if: env.SHOULD_SKIP != 'true'
         working-directory: ${{ github.workspace }}/siyuan-ios
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme siyuan-ios -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
           mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload
           cd ../siyuan-ios-out
           zip -r Payload.zip Payload
-          mv Payload.zip siyuan-${{ env.VERSION }}-ios.ipa
+          mv Payload.zip siyuan-${{ needs.check-version.outputs.version }}-ios.ipa
 
       - name: Release iOS ipa
-        if: env.SHOULD_SKIP != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.VERSION }}-unlock
-          name: "Siyuan Unlock ${{ env.VERSION }}"
+          tag_name: ${{ needs.check-version.outputs.version }}-unlock
+          name: "Siyuan Unlock ${{ needs.check-version.outputs.version }}"
           append_body: true
           files: ${{ github.workspace }}/siyuan-ios-out/siyuan-*-ios.ipa
