@@ -27,7 +27,11 @@ jobs:
         run: |
           INPUT_VER="${{ github.event.inputs.version }}"
           if [ -z "$INPUT_VER" ]; then
-            LATEST_TAG=$(curl -s https://api.github.com/repos/siyuan-note/siyuan/releases/latest | grep "\"tag_name\"" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
+            LATEST_TAG=$(curl -s https://api.github.com/repos/siyuan-note/siyuan/releases/latest | jq -r '.tag_name // empty')
+            if [ -z "$LATEST_TAG" ]; then
+              echo "Error: Failed to fetch latest official version tag from GitHub API."
+              exit 1
+            fi
             echo "Auto-detected latest official version: ${LATEST_TAG}"
             VERSION="${LATEST_TAG}"
           else
@@ -136,7 +140,10 @@ jobs:
       - name: Set up goversioninfo (Windows)
         if: matrix.config.goos == 'windows'
         working-directory: ${{ github.workspace }}/siyuan/kernel
-        run: go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
+        shell: bash
+        run: |
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.4.1
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -219,36 +226,37 @@ jobs:
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan-android.git
           cd siyuan-android
 
-          python3 -c '
-          with open("app/build.gradle", "r", encoding="utf-8") as f:
+          python3 -c "
+          with open('app/build.gradle', 'r', encoding='utf-8') as f:
               c = f.read()
 
-          c = c.replace("apply from: rootProject.file(\'signings.gradle\')", "//apply from: rootProject.file(\'signings.gradle\')")
-          c = c.replace("apply from: rootProject.file(\'buildRelease.gradle\')", "//apply from: rootProject.file(\'buildRelease.gradle\')")
-          c = c.replace("signingConfig signingConfigs.siyuanConfig", "signingConfig signingConfigs.release")
+          c = c.replace(\"apply from: rootProject.file('signings.gradle')\", \"//apply from: rootProject.file('signings.gradle')\")
+          c = c.replace(\"apply from: rootProject.file('buildRelease.gradle')\", \"//apply from: rootProject.file('buildRelease.gradle')\")
+          c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
+          c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
 
-          if "signingConfigs {" not in c:
-              c = c.replace("buildFeatures {", """    signingConfigs {
+          if 'signingConfigs {' not in c:
+              c = c.replace('buildFeatures {', '''    signingConfigs {
                   release {
-                      def ksFile = file("${rootDir}/keystore/siyuan.jks")
+                      def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
                       storeFile ksFile
-                      storePassword "123456"
-                      keyAlias "siyuan"
-                      keyPassword "123456"
+                      storePassword \"123456\"
+                      keyAlias \"siyuan\"
+                      keyPassword \"123456\"
                   }
               }
 
-              buildFeatures {""")
+              buildFeatures {''')
 
-          with open("app/build.gradle", "w", encoding="utf-8") as f:
+          with open('app/build.gradle', 'w', encoding='utf-8') as f:
               f.write(c)
 
-          with open("build.gradle", "r", encoding="utf-8") as f:
+          with open('build.gradle', 'r', encoding='utf-8') as f:
               lines = f.readlines()
-          lines = [l for l in lines if "aliyun" not in l.lower()]
-          with open("build.gradle", "w", encoding="utf-8") as f:
+          lines = [l for l in lines if 'aliyun' not in l.lower()]
+          with open('build.gradle', 'w', encoding='utf-8') as f:
               f.writelines(lines)
-          ' || true
+          " || true
 
           mkdir -p app/src/main/assets/
           mkdir -p app/libs/
@@ -282,7 +290,7 @@ jobs:
       - name: gomobile
         working-directory: ${{ github.workspace }}/go
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240112184804-03a088924b61
           gomobile init
 
       - name: Set up java
@@ -394,21 +402,21 @@ jobs:
             cp -r Assets.xcassets/AppIcon.appiconset Assets.xcassets/logo.appiconset || true
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          python3 -c '
-          with open("siyuan-ios.xcodeproj/project.pbxproj", "r", encoding="utf-8") as f:
+          python3 -c "
+          with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
               c = f.read()
 
-          c = c.replace("PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;", "CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;")
-          c = c.replace("PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;", "CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;")
-          c = c.replace("CODE_SIGN_STYLE = Automatic;", "CODE_SIGN_STYLE = Manual;")
-          c = c.replace("CODE_SIGN_IDENTITY = \"Apple Development\";", "CODE_SIGN_IDENTITY = \"\";")
+          c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;')
+          c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;')
+          c = c.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
+          c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\";', 'CODE_SIGN_IDENTITY = \"\";')
 
-          lines = [l for l in c.splitlines() if not any(k in l for k in ["DEVELOPMENT_TEAM", "PROVISIONING_PROFILE_SPECIFIER", "CODE_SIGN_ENTITLEMENTS"])]
-          final_c = "\n".join(lines)
+          lines = [l for l in c.splitlines() if not any(k in l for k in ['DEVELOPMENT_TEAM', 'PROVISIONING_PROFILE_SPECIFIER'])]
+          final_c = '\n'.join(lines)
 
-          with open("siyuan-ios.xcodeproj/project.pbxproj", "w", encoding="utf-8") as f:
+          with open('siyuan-ios.xcodeproj/project.pbxproj', 'w', encoding='utf-8') as f:
               f.write(final_c)
-          ' || true
+          " || true
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -437,7 +445,7 @@ jobs:
 
       - name: Install gomobile
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240112184804-03a088924b61
           gomobile init
 
       - name: Building ios Kernel
@@ -465,12 +473,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          SCHEME_NAME=$(xcodebuild -list -workspace ./siyuan-ios.xcodeproj/project.xcworkspace | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
+          SCHEME_NAME=$(xcodebuild -list -project ./siyuan-ios.xcodeproj | grep -A 10 "Schemes:" | tail -n +2 | head -n 1 | xargs)
           if [ -z "$SCHEME_NAME" ]; then
             SCHEME_NAME="siyuan-ios"
           fi
           echo "Detected Xcode Scheme: ${SCHEME_NAME}"
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES -derivedDataPath ../siyuan-ios-out
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme "$SCHEME_NAME" -sdk iphoneos -destination 'generic/platform=iOS' -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES -derivedDataPath ../siyuan-ios-out
           APP_PATH=$(find ../siyuan-ios-out/Build/Products/Release-iphoneos -name "*.app" | head -n 1)
           echo "Found compiled app at: ${APP_PATH}"
           mv "$APP_PATH" ../siyuan-ios-out/Payload/
