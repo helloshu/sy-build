@@ -54,6 +54,7 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ${{ matrix.config.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -124,10 +125,10 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan
         shell: bash
         run: |
-          git apply ../sy-build/patches/siyuan/disable-update.patch
-          git apply ../sy-build/patches/siyuan/default-config.patch
-          git apply ../sy-build/patches/siyuan/mock-vip-user.patch
-          git apply ../sy-build/patches/siyuan/hide-account-entry.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/disable-update.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/default-config.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/mock-vip-user.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/hide-account-entry.patch
           echo "Patches applied successfully."
 
       - name: Set up Go
@@ -160,7 +161,7 @@ jobs:
       - name: Build UI
         working-directory: ${{ github.workspace }}/siyuan/app
         run: |
-          pnpm install --no-frozen-lockfile
+          pnpm install --prefer-frozen-lockfile
           pnpm run install:electron
           pnpm run build
 
@@ -202,6 +203,7 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 45
     steps:
       - name: Checkout sy-build repository
         uses: actions/checkout@v4
@@ -262,7 +264,7 @@ jobs:
           npm install -g $packageManager
 
       - name: Install Node Dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --prefer-frozen-lockfile
         working-directory: ${{ github.workspace }}/siyuan/app
 
       - name: Building UI
@@ -347,6 +349,7 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout sy-build repository
         uses: actions/checkout@v4
@@ -370,10 +373,10 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan
         shell: bash
         run: |
-          git apply ../sy-build/patches/siyuan/disable-update.patch
-          git apply ../sy-build/patches/siyuan/default-config.patch
-          git apply ../sy-build/patches/siyuan/mock-vip-user.patch
-          git apply ../sy-build/patches/siyuan/hide-account-entry.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/disable-update.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/default-config.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/mock-vip-user.patch
+          git apply --ignore-whitespace ../sy-build/patches/siyuan/hide-account-entry.patch
           echo "Patches applied successfully."
 
       - name: Fix iOS AppIcon and Project Settings
@@ -420,7 +423,7 @@ jobs:
       - name: Build UI
         working-directory: ${{ github.workspace }}/siyuan/app
         run: |
-          pnpm install --no-frozen-lockfile
+          pnpm install --prefer-frozen-lockfile
           pnpm run build
 
       - name: Install gomobile
