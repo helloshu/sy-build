@@ -142,7 +142,7 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan/kernel
         shell: bash
         run: |
-          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@v1.4.1
+          go install github.com/josephspurrier/goversioninfo/cmd/goversioninfo@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Set up Node
@@ -287,7 +287,7 @@ jobs:
         run: pnpm run build
         working-directory: ${{ github.workspace }}/siyuan/app
 
-      - name: gomobile
+      - name: Install gomobile
         working-directory: ${{ github.workspace }}/go
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
@@ -404,12 +404,11 @@ jobs:
             cp -r Assets.xcassets/AppIcon.appiconset Assets.xcassets/logo.appiconset || true
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
           python3 -c "
           with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
               c = f.read()
 
-          c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;')
-          c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;')
           c = c.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
           c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\";', 'CODE_SIGN_IDENTITY = \"\";')
 
