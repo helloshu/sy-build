@@ -232,10 +232,10 @@ jobs:
           c = c.replace('apply from: rootProject.file(\\'signings.gradle\\')', '//apply from: rootProject.file(\\'signings.gradle\\')')
           c = c.replace('apply from: rootProject.file(\\'buildRelease.gradle\\')', '//apply from: rootProject.file(\\'buildRelease.gradle\\')')
           c = c.replace('implementation(name: \\'kernel\\', ext: \\'aar\\')', 'implementation files(\\'libs/kernel.aar\\')')
-          c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
           block = '''\n    signingConfigs {\n        release {\n            def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")\n            storeFile ksFile\n            storePassword \"123456\"\n            keyAlias \"siyuan\"\n            keyPassword \"123456\"\n        }\n    }\n    packaging {\n        resources {\n            excludes += [\"META-INF/INDEX.LIST\", \"META-INF/io.netty.versions.properties\"]\n        }\n    }\n'''
-          if 'android {' in c and 'signingConfigs.release' not in c:
+          if 'android {' in c and 'signingConfigs {' not in c:
               c = c.replace('android {', 'android {' + block)
+          c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
           with open('app/build.gradle', 'w', encoding='utf-8') as f:
               f.write(c)
           "
@@ -387,6 +387,16 @@ jobs:
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          # 禁用代码签名：Automatic→Manual，清空签名身份，适配未签名构建
+          python3 -c "
+          with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
+              c = f.read()
+          c = c.replace('CODE_SIGN_STYLE = Automatic', 'CODE_SIGN_STYLE = Manual')
+          c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\"', 'CODE_SIGN_IDENTITY = \"\"')
+          with open('siyuan-ios.xcodeproj/project.pbxproj', 'w', encoding='utf-8') as f:
+              f.write(c)
+          print('pbxproj 签名设置已改为 Manual / 空签名身份')
+          "
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -445,7 +455,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO -derivedDataPath ../siyuan-ios-out
+          # 诊断：确认可用 scheme（CI 全新环境可能缺少 shared scheme）
+          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -list || true
+          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
           mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload/
           cd ../siyuan-ios-out
           zip -r Payload.zip Payload
