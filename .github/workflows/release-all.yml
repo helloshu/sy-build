@@ -239,7 +239,7 @@ jobs:
               c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
               c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
 
-              release_signing = '''    signingConfigs {
+              signing_block = '''    signingConfigs {
                   release {
                       def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
                       storeFile ksFile
@@ -249,10 +249,8 @@ jobs:
                   }
               }'''
 
-              if 'signingConfigs.release' not in c and 'signingConfigs {' not in c:
-                  c = c.replace('buildFeatures {', release_signing + '\n\n    buildFeatures {')
-              elif 'signingConfigs {' in c and 'release {' not in c:
-                  c = c.replace('signingConfigs {', 'signingConfigs {\n        release {\n            def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")\n            storeFile ksFile\n            storePassword \"123456\"\n            keyAlias \"siyuan\"\n            keyPassword \"123456\"\n        }')
+              if 'signingConfigs' not in c:
+                  c = c.replace('defaultConfig {', signing_block + '\n\n    defaultConfig {')
 
               with open(gradle_path, 'w', encoding='utf-8') as f:
                   f.write(c)
@@ -412,7 +410,24 @@ jobs:
             cp -r Assets.xcassets/AppIcon.appiconset Assets.xcassets/logo.appiconset || true
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
+          python3 -c "
+          import os, re
+
+          pbx_path = 'siyuan-ios.xcodeproj/project.pbxproj'
+          if os.path.exists(pbx_path):
+              with open(pbx_path, 'r', encoding='utf-8', errors='ignore') as f:
+                  c = f.read()
+
+              c = c.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
+              c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\";', 'CODE_SIGN_IDENTITY = \"\";')
+              c = c.replace('CODE_SIGN_IDENTITY = \"iPhone Developer\";', 'CODE_SIGN_IDENTITY = \"\";')
+
+              c = re.sub(r'DEVELOPMENT_TEAM = [A-Z0-9]+;', 'DEVELOPMENT_TEAM = \"\";', c)
+              c = re.sub(r'PROVISIONING_PROFILE_SPECIFIER = [^;]+;', 'PROVISIONING_PROFILE_SPECIFIER = \"\";', c)
+
+              with open(pbx_path, 'w', encoding='utf-8') as f:
+                  f.write(c)
+          "
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -471,7 +486,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO -derivedDataPath ../siyuan-ios-out
+          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" AD_HOC_CODE_SIGNING_ALLOWED=YES -derivedDataPath ../siyuan-ios-out
           mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload/
           cd ../siyuan-ios-out
           zip -r Payload.zip Payload
