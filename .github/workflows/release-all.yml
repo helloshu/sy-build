@@ -336,7 +336,7 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan-android
         run: |
           chmod 777 ./gradlew
-          ./gradlew :app:assembleOfficialRelease -x lint -x lintVitalRelease -x test
+          ./gradlew :app:assembleOfficialRelease
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
 
