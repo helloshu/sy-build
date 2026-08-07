@@ -227,36 +227,42 @@ jobs:
           cd siyuan-android
 
           python3 -c "
-          with open('app/build.gradle', 'r', encoding='utf-8') as f:
-              c = f.read()
+          import os
 
-          c = c.replace(\"apply from: rootProject.file('signings.gradle')\", \"//apply from: rootProject.file('signings.gradle')\")
-          c = c.replace(\"apply from: rootProject.file('buildRelease.gradle')\", \"//apply from: rootProject.file('buildRelease.gradle')\")
-          c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
-          c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
+          gradle_path = 'app/build.gradle'
+          if os.path.exists(gradle_path):
+              with open(gradle_path, 'r', encoding='utf-8', errors='ignore') as f:
+                  c = f.read()
 
-          if 'signingConfigs {' not in c:
-              c = c.replace('buildFeatures {', '''    signingConfigs {
-                  release {
-                      def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
-                      storeFile ksFile
-                      storePassword \"123456\"
-                      keyAlias \"siyuan\"
-                      keyPassword \"123456\"
+              c = c.replace(\"apply from: rootProject.file('signings.gradle')\", \"//apply from: rootProject.file('signings.gradle')\")
+              c = c.replace(\"apply from: rootProject.file('buildRelease.gradle')\", \"//apply from: rootProject.file('buildRelease.gradle')\")
+              c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
+              c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
+
+              if 'signingConfigs {' not in c:
+                  c = c.replace('buildFeatures {', '''    signingConfigs {
+                      release {
+                          def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
+                          storeFile ksFile
+                          storePassword \"123456\"
+                          keyAlias \"siyuan\"
+                          keyPassword \"123456\"
+                      }
                   }
-              }
 
-              buildFeatures {''')
+                  buildFeatures {''')
 
-          with open('app/build.gradle', 'w', encoding='utf-8') as f:
-              f.write(c)
+              with open(gradle_path, 'w', encoding='utf-8') as f:
+                  f.write(c)
 
-          with open('build.gradle', 'r', encoding='utf-8') as f:
-              lines = f.readlines()
-          lines = [l for l in lines if 'aliyun' not in l.lower()]
-          with open('build.gradle', 'w', encoding='utf-8') as f:
-              f.writelines(lines)
-          " || true
+          root_gradle = 'build.gradle'
+          if os.path.exists(root_gradle):
+              with open(root_gradle, 'r', encoding='utf-8', errors='ignore') as f:
+                  lines = f.readlines()
+              lines = [l for l in lines if 'aliyun' not in l.lower()]
+              with open(root_gradle, 'w', encoding='utf-8') as f:
+                  f.writelines(lines)
+          "
 
           mkdir -p app/src/main/assets/
           mkdir -p app/libs/
@@ -404,20 +410,25 @@ jobs:
             cp -r Assets.xcassets/AppIcon.appiconset Assets.xcassets/logo.appiconset || true
           fi
           sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
           python3 -c "
-          with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
-              c = f.read()
+          import os
 
-          c = c.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
-          c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\";', 'CODE_SIGN_IDENTITY = \"\";')
+          pbx_path = 'siyuan-ios.xcodeproj/project.pbxproj'
+          if os.path.exists(pbx_path):
+              with open(pbx_path, 'r', encoding='utf-8', errors='ignore') as f:
+                  c = f.read()
 
-          lines = [l for l in c.splitlines() if not any(k in l for k in ['DEVELOPMENT_TEAM', 'PROVISIONING_PROFILE_SPECIFIER'])]
-          final_c = '\n'.join(lines)
+              c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;')
+              c = c.replace('PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.ShorthandShare;', 'CODE_SIGNING_ALLOWED = NO;\n\t\t\t\tCODE_SIGNING_REQUIRED = NO;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug.ShorthandShare;')
+              c = c.replace('CODE_SIGN_STYLE = Automatic;', 'CODE_SIGN_STYLE = Manual;')
+              c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\";', 'CODE_SIGN_IDENTITY = \"\";')
 
-          with open('siyuan-ios.xcodeproj/project.pbxproj', 'w', encoding='utf-8') as f:
-              f.write(final_c)
-          " || true
+              lines = [l for l in c.splitlines() if not any(k in l for k in ['DEVELOPMENT_TEAM', 'PROVISIONING_PROFILE_SPECIFIER'])]
+              final_c = '\n'.join(lines)
+
+              with open(pbx_path, 'w', encoding='utf-8') as f:
+                  f.write(final_c)
+          "
 
       - name: Set up Go
         uses: actions/setup-go@v5
