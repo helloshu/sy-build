@@ -462,7 +462,7 @@ jobs:
           # 诊断：列出可用 target（CI 全新环境可能缺少 shared scheme）
           xcodebuild -project ./siyuan-ios.xcodeproj -list || true
           # 用 -project + -target 避免缺少 shared scheme 导致 -scheme 找不到
-          xcodebuild -project ./siyuan-ios.xcodeproj -target siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
+          xcodebuild -project ./siyuan-ios.xcodeproj -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
           mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload/
           cd ../siyuan-ios-out
           zip -r Payload.zip Payload
