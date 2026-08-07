@@ -239,6 +239,8 @@ jobs:
           if 'android {' in c and 'signingConfigs {' not in c:
               c = c.replace('android {', 'android {' + block)
           c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
+          assert 'signingConfigs {' in c, 'ERROR: signingConfigs block injection failed - upstream may have changed build.gradle'
+          assert 'signingConfig signingConfigs.release' in c, 'ERROR: signingConfig ref replacement failed - upstream may have changed build.gradle'
           with open('app/build.gradle', 'w', encoding='utf-8') as f:
               f.write(c)
           "
@@ -393,10 +395,11 @@ jobs:
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
           # 禁用代码签名：Automatic→Manual，清空签名身份，适配未签名构建
           python3 -c "
+          import re
           with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
               c = f.read()
-          c = c.replace('CODE_SIGN_STYLE = Automatic', 'CODE_SIGN_STYLE = Manual')
-          c = c.replace('CODE_SIGN_IDENTITY = \"Apple Development\"', 'CODE_SIGN_IDENTITY = \"\"')
+          c = re.sub(r'CODE_SIGN_STYLE = \w+', 'CODE_SIGN_STYLE = Manual', c)
+          c = re.sub(r'CODE_SIGN_IDENTITY = \"[^\"]*\"', 'CODE_SIGN_IDENTITY = \"\"', c)
           with open('siyuan-ios.xcodeproj/project.pbxproj', 'w', encoding='utf-8') as f:
               f.write(c)
           print('pbxproj 签名设置已改为 Manual / 空签名身份')
