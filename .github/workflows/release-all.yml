@@ -235,22 +235,22 @@ jobs:
           c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
           c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
 
-          if 'signingConfigs {' not in c:
-              c = c.replace('buildFeatures {', '''    signingConfigs {
+          signing_code = '''    signingConfigs {
                   release {
-                      def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
+                      def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")
                       storeFile ksFile
                       storePassword \"123456\"
                       keyAlias \"siyuan\"
                       keyPassword \"123456\"
                   }
-              }
+              }'''
 
-              buildFeatures {''')
+          if 'signingConfigs {' not in c:
+              c = c.replace('buildFeatures {', signing_code + '\n\n    buildFeatures {')
           else:
               c = c.replace('signingConfigs {', '''signingConfigs {
                   release {
-                      def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
+                      def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")
                       storeFile ksFile
                       storePassword \"123456\"
                       keyAlias \"siyuan\"
@@ -354,7 +354,7 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan-android
         run: |
           chmod 777 ./gradlew
-          ./gradlew :app:assembleRelease -x lint -x lintVitalRelease -x test
+          ./gradlew :app:assembleOfficialRelease -x lint -x lintVitalRelease -x test
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
 
@@ -362,7 +362,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/*/release/siyuan-*.apk
+          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/**/release/siyuan-*.apk
 
   build-ios:
     needs: check-version
