@@ -290,7 +290,9 @@ jobs:
       - name: gomobile
         working-directory: ${{ github.workspace }}/go
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240112184804-03a088924b61
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          export PATH=$PATH:$(go env GOPATH)/bin
           gomobile init
 
       - name: Set up java
@@ -445,7 +447,9 @@ jobs:
 
       - name: Install gomobile
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@v0.0.0-20240112184804-03a088924b61
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+          export PATH=$PATH:$(go env GOPATH)/bin
           gomobile init
 
       - name: Building ios Kernel
