@@ -4,15 +4,14 @@ index 3eee686..af77417 100644
 +++ b/app/build.gradle
 @@ -5,8 +5,8 @@ plugins {
  
- // 多渠道打包配置
  apply from: rootProject.file('flavors.gradle')
 -apply from: rootProject.file('signings.gradle')
 -apply from: rootProject.file('buildRelease.gradle')
 +//apply from: rootProject.file('signings.gradle')
 +//apply from: rootProject.file('buildRelease.gradle')
  
- // 1. 配置 App Bundle (.aab) 的基础文件名
  base {
+     archivesName = "siyuan-${siyuanVersionName}"
 @@ -46,6 +46,23 @@ android {
          versionName siyuanVersionName
      }
@@ -40,9 +39,16 @@ index 3eee686..af77417 100644
 @@ -53,7 +70,7 @@ android {
      buildTypes {
          release {
-             // 正式版打包时指定签名证书
 -            signingConfig signingConfigs.siyuanConfig
 +            signingConfig signingConfigs.release
  
              minifyEnabled true
              shrinkResources true
+@@ -106,7 +123,7 @@ dependencies {
+     implementation 'commons-io:commons-io:2.21.0'
+     implementation 'com.gitee.zackratos:UltimateBarX:0.8.1'
+     implementation 'com.blankj:utilcodex:1.31.1'
+     implementation 'com.koushikdutta.async:androidasync:3.1.0'
+-    implementation(name: 'kernel', ext: 'aar')
++    implementation files('libs/kernel.aar')
+ }
