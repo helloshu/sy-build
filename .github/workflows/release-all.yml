@@ -110,12 +110,12 @@ jobs:
 
     steps:
       - name: Checkout sy-build repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: sy-build
 
       - name: Checkout official siyuan-note/siyuan
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: siyuan-note/siyuan
           ref: ${{ needs.check-version.outputs.version }}
@@ -147,7 +147,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -161,6 +161,7 @@ jobs:
       - name: Build UI
         working-directory: ${{ github.workspace }}/siyuan/app
         run: |
+          python3 -c "import pathlib; p=pathlib.Path('package.json'); p.write_text(p.read_text().replace('https://npmmirror.com/mirrors/electron/','https://github.com/electron/electron/releases/download/'))"
           pnpm install --prefer-frozen-lockfile
           pnpm run install:electron
           pnpm run build
@@ -206,7 +207,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout sy-build repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: sy-build
 
@@ -252,7 +253,7 @@ jobs:
           cache-dependency-path: ${{ github.workspace }}/siyuan/kernel/go.sum
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -352,19 +353,19 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout sy-build repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: sy-build
 
       - name: Checkout official siyuan-note/siyuan
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: siyuan-note/siyuan
           ref: ${{ needs.check-version.outputs.version }}
           path: siyuan
 
       - name: Checkout official siyuan-note/siyuan-ios
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: siyuan-note/siyuan-ios
           path: siyuan-ios
@@ -409,7 +410,7 @@ jobs:
           cache: true
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -482,7 +483,7 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost || true
 
       - name: Checkout sy-build repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: sy-build
 
