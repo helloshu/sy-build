@@ -235,7 +235,7 @@ jobs:
           c = c.replace('apply from: rootProject.file(\\'signings.gradle\\')', '//apply from: rootProject.file(\\'signings.gradle\\')')
           c = c.replace('apply from: rootProject.file(\\'buildRelease.gradle\\')', '//apply from: rootProject.file(\\'buildRelease.gradle\\')')
           c = c.replace('implementation(name: \\'kernel\\', ext: \\'aar\\')', 'implementation files(\\'libs/kernel.aar\\')')
-          block = '''\n    signingConfigs {\n        release {\n            def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")\n            storeFile ksFile\n            storePassword \"123456\"\n            keyAlias \"siyuan\"\n            keyPassword \"123456\"\n        }\n    }\n    packaging {\n        resources {\n            excludes += [\"META-INF/INDEX.LIST\", \"META-INF/io.netty.versions.properties\"]\n        }\n    }\n'''
+          block = '''\n    signingConfigs {\n        release {\n            def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")\n            storeFile ksFile\n            storePassword \"123456\"\n            keyAlias \"siyuan\"\n            keyPassword \"123456\"\n        }\n    }\n'''
           if 'android {' in c and 'signingConfigs {' not in c:
               c = c.replace('android {', 'android {' + block)
           c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
@@ -281,7 +281,7 @@ jobs:
           gomobile init
 
       - name: Set up java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: "temurin"
           java-version: "17"
@@ -459,9 +459,10 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          # 诊断：确认可用 scheme（CI 全新环境可能缺少 shared scheme）
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -list || true
-          xcodebuild -workspace ./siyuan-ios.xcodeproj/project.xcworkspace -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
+          # 诊断：列出可用 target（CI 全新环境可能缺少 shared scheme）
+          xcodebuild -project ./siyuan-ios.xcodeproj -list || true
+          # 用 -project + -target 避免缺少 shared scheme 导致 -scheme 找不到
+          xcodebuild -project ./siyuan-ios.xcodeproj -target siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
           mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload/
           cd ../siyuan-ios-out
           zip -r Payload.zip Payload
