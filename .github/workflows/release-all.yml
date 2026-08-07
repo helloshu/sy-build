@@ -226,37 +226,16 @@ jobs:
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan-android.git
           cd siyuan-android
 
-          python3 -c "
+          python3 -c "import os
           with open('app/build.gradle', 'r', encoding='utf-8', errors='ignore') as f:
               c = f.read()
-
-          c = c.replace(\"apply from: rootProject.file('signings.gradle')\", \"//apply from: rootProject.file('signings.gradle')\")
-          c = c.replace(\"apply from: rootProject.file('buildRelease.gradle')\", \"//apply from: rootProject.file('buildRelease.gradle')\")
-          c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
-          c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
-
-          signing_code = '''    signingConfigs {
-                  release {
-                      def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")
-                      storeFile ksFile
-                      storePassword \"123456\"
-                      keyAlias \"siyuan\"
-                      keyPassword \"123456\"
-                  }
-              }'''
-
-          if 'signingConfigs {' not in c:
-              c = c.replace('buildFeatures {', signing_code + '\n\n    buildFeatures {')
-          else:
-              c = c.replace('signingConfigs {', '''signingConfigs {
-                  release {
-                      def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")
-                      storeFile ksFile
-                      storePassword \"123456\"
-                      keyAlias \"siyuan\"
-                      keyPassword \"123456\"
-                  }''')
-
+          c = c.replace('apply from: rootProject.file(\\'signings.gradle\\')', '//apply from: rootProject.file(\\'signings.gradle\\')')
+          c = c.replace('apply from: rootProject.file(\\'buildRelease.gradle\\')', '//apply from: rootProject.file(\\'buildRelease.gradle\\')')
+          c = c.replace('implementation(name: \\'kernel\\', ext: \\'aar\\')', 'implementation files(\\'libs/kernel.aar\\')')
+          c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
+          block = '''\n    signingConfigs {\n        release {\n            def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")\n            storeFile ksFile\n            storePassword \"123456\"\n            keyAlias \"siyuan\"\n            keyPassword \"123456\"\n        }\n    }\n    packaging {\n        resources {\n            excludes += [\"META-INF/INDEX.LIST\", \"META-INF/io.netty.versions.properties\"]\n        }\n    }\n'''
+          if 'android {' in c and 'signingConfigs.release' not in c:
+              c = c.replace('android {', 'android {' + block)
           with open('app/build.gradle', 'w', encoding='utf-8') as f:
               f.write(c)
           "
