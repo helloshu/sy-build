@@ -366,11 +366,19 @@ jobs:
           ref: ${{ needs.check-version.outputs.version }}
           path: siyuan
 
-      - name: Checkout official siyuan-note/siyuan-ios
-        uses: actions/checkout@v6
-        with:
-          repository: siyuan-note/siyuan-ios
-          path: siyuan-ios
+      - name: Checkout compatible siyuan-note/siyuan-ios
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          VERSION="${{ needs.check-version.outputs.version }}"
+          PUBLISH_DATE=$(curl -s "https://api.github.com/repos/siyuan-note/siyuan/releases/tags/${VERSION}" | jq -r '.published_at')
+          echo "Siyuan ${VERSION} published at: ${PUBLISH_DATE}"
+          # siyuan-ios 没有 tag，按 siyuan 发布日期找到兼容 commit
+          COMPATIBLE_COMMIT=$(curl -s "https://api.github.com/repos/siyuan-note/siyuan-ios/commits?until=${PUBLISH_DATE}&per_page=1" | jq -r '.[0].sha')
+          echo "Using compatible siyuan-ios commit: ${COMPATIBLE_COMMIT}"
+          mkdir -p siyuan-ios && cd siyuan-ios && git init
+          git fetch --depth=1 https://github.com/siyuan-note/siyuan-ios.git ${COMPATIBLE_COMMIT}
+          git checkout FETCH_HEAD
 
       - name: Apply unlock patches
         working-directory: ${{ github.workspace }}/siyuan
