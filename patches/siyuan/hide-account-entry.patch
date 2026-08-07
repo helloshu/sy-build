@@ -1,0 +1,37 @@
+diff --git forkSrcPrefix/app/src/config/tabs/syncTab.ts forkDstPrefix/app/src/config/tabs/syncTab.ts
+--- forkSrcPrefix/app/src/config/tabs/syncTab.ts
++++ forkDstPrefix/app/src/config/tabs/syncTab.ts
+@@ -1,5 +1,4 @@
+ import type {SettingTabBuilder} from "../setting/builder";
+-import {registerAccountGroup} from "./accountUi";
+ import {Constants} from "../../constants";
+ import {fetchPost} from "../../util/fetch";
+ import {confirmDialog} from "../../dialog/confirmDialog";
+@@ -263,7 +262,6 @@ const mountRepoKey = (root: HTMLElement) => {
+ };
+ 
+ export const registerSyncTab = (tab: SettingTabBuilder) => {
+-    registerAccountGroup(tab);
+     registerSyncGroup(tab);
+     registerRepoGroup(tab);
+ };
+diff --git forkSrcPrefix/app/src/layout/topBar.ts forkDstPrefix/app/src/layout/topBar.ts
+--- forkSrcPrefix/app/src/layout/topBar.ts
++++ forkDstPrefix/app/src/layout/topBar.ts
+@@ -10,6 +10,5 @@ import {workspaceMenu} from "../menus/workspace";
+ import {MenuItem} from "../menus/Menu";
+ import {setMode} from "../util/assets";
+-import {openSetting} from "../config";
+ import {openSearch} from "../search/spread";
+ import {App} from "../index";
+ /// #if !BROWSER
+@@ -212,9 +211,6 @@ export const initBar = (app: App) => {
+                 event.stopPropagation();
+                 break;
+             } else if (targetId === "toolbarVIP") {
+-                if (!window.siyuan.config.readonly) {
+-                    openSetting(app, "sync");
+-                }
+                 event.stopPropagation();
+                 break;
+             } else if (targetId === "barSearch") {
