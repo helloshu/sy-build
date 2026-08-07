@@ -226,7 +226,41 @@ jobs:
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan-android.git
           cd siyuan-android
 
-          git apply --ignore-whitespace --verbose ${{ github.workspace }}/sy-build/patches/siyuan-android/debug-build.patch
+          python3 -c "
+          with open('app/build.gradle', 'r', encoding='utf-8', errors='ignore') as f:
+              c = f.read()
+
+          c = c.replace(\"apply from: rootProject.file('signings.gradle')\", \"//apply from: rootProject.file('signings.gradle')\")
+          c = c.replace(\"apply from: rootProject.file('buildRelease.gradle')\", \"//apply from: rootProject.file('buildRelease.gradle')\")
+          c = c.replace(\"implementation(name: 'kernel', ext: 'aar')\", \"implementation files('libs/kernel.aar')\")
+          c = c.replace(\"signingConfig signingConfigs.siyuanConfig\", \"signingConfig signingConfigs.release\")
+
+          if 'signingConfigs {' not in c:
+              c = c.replace('buildFeatures {', '''    signingConfigs {
+                  release {
+                      def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
+                      storeFile ksFile
+                      storePassword \"123456\"
+                      keyAlias \"siyuan\"
+                      keyPassword \"123456\"
+                  }
+              }
+
+              buildFeatures {''')
+          else:
+              c = c.replace('signingConfigs {', '''signingConfigs {
+                  release {
+                      def ksFile = file(\"\\\${rootDir}/keystore/siyuan.jks\")
+                      storeFile ksFile
+                      storePassword \"123456\"
+                      keyAlias \"siyuan\"
+                      keyPassword \"123456\"
+                  }''')
+
+          with open('app/build.gradle', 'w', encoding='utf-8') as f:
+              f.write(c)
+          "
+
           mkdir -p app/src/main/assets/
           mkdir -p app/libs/
 
