@@ -7,9 +7,6 @@ on:
         description: "版本号（留空自动使用上游最新版）"
         required: false
         default: ""
-  push:
-    branches:
-      - main
   schedule:
     # 每天北京时间 08:00 (UTC 00:00) 自动检测上游更新
     - cron: "0 0 * * *"
