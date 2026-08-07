@@ -219,10 +219,10 @@ jobs:
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
           cd siyuan
 
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
 
           cd ..
 
@@ -459,9 +459,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p ../siyuan-ios-out/Payload
-          # 诊断：列出可用 target（CI 全新环境可能缺少 shared scheme）
+          # 诊断：列出可用 scheme
           xcodebuild -project ./siyuan-ios.xcodeproj -list || true
-          # 用 -project + -target 避免缺少 shared scheme 导致 -scheme 找不到
+          # 构建：-derivedDataPath 要求必须配合 -scheme（-target 不行）
           xcodebuild -project ./siyuan-ios.xcodeproj -scheme siyuan-ios -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO -derivedDataPath ../siyuan-ios-out
           mv ../siyuan-ios-out/Build/Products/Release-iphoneos/siyuan-ios.app ../siyuan-ios-out/Payload/
           cd ../siyuan-ios-out
@@ -478,6 +478,7 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Free Disk Space (Native Clean)
         run: |
@@ -492,10 +493,10 @@ jobs:
         run: |
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
           cd siyuan
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
-          git apply ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
+          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -516,7 +517,7 @@ jobs:
 
   release-all:
     needs: [check-version, build-desktop, build-android, build-ios, build-docker]
-    if: always() && needs.check-version.outputs.should_skip != 'true'
+    if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download All Artifacts
