@@ -322,7 +322,7 @@ jobs:
             export ANDROID_NDK_HOME="$NDK_PATH"
             echo "Using NDK: $ANDROID_NDK_HOME"
           fi
-          gomobile bind --tags fts5 -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
+          gomobile bind --tags "fts5 sqlcipher" -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         env:
           GO111MODULE: on
@@ -488,7 +488,7 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         run: |
           mkdir -p ../ios
-          gomobile bind --tags fts5 -ldflags '-s -w' -v -target=ios -o "../ios/iosk.xcframework" ./
+          gomobile bind --tags "fts5 sqlcipher" -ldflags '-s -w' -v -target=ios -o "../ios/iosk.xcframework" ./
           cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/ || true
           cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/siyuan-ios/ || true
         env:
