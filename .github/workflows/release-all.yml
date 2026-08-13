@@ -24,12 +24,30 @@ jobs:
       - name: Determine Siyuan Version
         id: check_ver
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           INPUT_VER="${{ github.event.inputs.version }}"
           if [ -z "$INPUT_VER" ]; then
-            LATEST_TAG=$(curl -s https://api.github.com/repos/siyuan-note/siyuan/releases/latest | jq -r '.tag_name // empty')
+            LATEST_TAG=""
+            if RELEASE_JSON=$(curl --fail-with-body --silent --show-error --location --retry 3 --retry-all-errors \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              https://api.github.com/repos/siyuan-note/siyuan/releases/latest); then
+              LATEST_TAG=$(jq -er '.tag_name' <<<"${RELEASE_JSON}") || true
+            fi
+
             if [ -z "$LATEST_TAG" ]; then
-              echo "Error: Failed to fetch latest official version tag from GitHub API."
+              echo "Warning: GitHub Releases API unavailable; falling back to stable Git tags."
+              if ! TAG_REFS=$(git ls-remote --tags --refs https://github.com/siyuan-note/siyuan.git 'v*'); then
+                echo "Error: Failed to fetch upstream tags."
+                exit 1
+              fi
+              LATEST_TAG=$(printf '%s\n' "$TAG_REFS" | awk '$2 ~ /^refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+$/ { sub("refs/tags/", "", $2); print $2 }' | sort -V | tail -n 1)
+            fi
+
+            if [ -z "$LATEST_TAG" ]; then
+              echo "Error: Failed to determine the latest official version."
               exit 1
             fi
             echo "Auto-detected latest official version: ${LATEST_TAG}"
@@ -42,7 +60,12 @@ jobs:
 
           # 检查本仓库 Releases 是否已存在对应的 -unlock 版本
           TARGET_TAG="${VERSION}-unlock"
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TARGET_TAG}")
+          HTTP_STATUS=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
+            --retry 3 --retry-all-errors \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TARGET_TAG}")
           if [ "$HTTP_STATUS" -eq 200 ] && [ "${{ github.event_name }}" == "schedule" ]; then
             echo "上游最新版本 ${VERSION} (${TARGET_TAG}) 已构建发布过，跳过本次定时构建。"
             echo "should_skip=true" >> $GITHUB_OUTPUT
@@ -371,14 +394,30 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ needs.check-version.outputs.version }}"
-          PUBLISH_DATE=$(curl -s "https://api.github.com/repos/siyuan-note/siyuan/releases/tags/${VERSION}" | jq -r '.published_at')
+          PUBLISH_DATE=""
+          if RELEASE_JSON=$(curl --fail-with-body --silent --show-error --location --retry 3 --retry-all-errors \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/siyuan-note/siyuan/releases/tags/${VERSION}"); then
+            PUBLISH_DATE=$(jq -er '.published_at' <<<"${RELEASE_JSON}") || true
+          fi
+
+          if [ -z "$PUBLISH_DATE" ]; then
+            PUBLISH_DATE=$(git -C siyuan show -s --format=%cI HEAD)
+            echo "Warning: Release API unavailable; using Siyuan commit date ${PUBLISH_DATE}."
+          fi
           echo "Siyuan ${VERSION} published at: ${PUBLISH_DATE}"
+
           # siyuan-ios 没有 tag，按 siyuan 发布日期找到兼容 commit
-          COMPATIBLE_COMMIT=$(curl -s "https://api.github.com/repos/siyuan-note/siyuan-ios/commits?until=${PUBLISH_DATE}&per_page=1" | jq -r '.[0].sha')
+          git clone --filter=blob:none --no-checkout --single-branch https://github.com/siyuan-note/siyuan-ios.git siyuan-ios
+          DEFAULT_REF=$(git -C siyuan-ios symbolic-ref refs/remotes/origin/HEAD)
+          COMPATIBLE_COMMIT=$(git -C siyuan-ios rev-list -1 --before="${PUBLISH_DATE}" "${DEFAULT_REF}")
+          if [ -z "$COMPATIBLE_COMMIT" ]; then
+            echo "Error: No compatible siyuan-ios commit found before ${PUBLISH_DATE}."
+            exit 1
+          fi
           echo "Using compatible siyuan-ios commit: ${COMPATIBLE_COMMIT}"
-          mkdir -p siyuan-ios && cd siyuan-ios && git init
-          git fetch --depth=1 https://github.com/siyuan-note/siyuan-ios.git ${COMPATIBLE_COMMIT}
-          git checkout FETCH_HEAD
+          git -C siyuan-ios checkout --detach "${COMPATIBLE_COMMIT}"
 
       - name: Apply unlock patches
         working-directory: ${{ github.workspace }}/siyuan
