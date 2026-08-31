@@ -1,0 +1,30 @@
+diff --git a/ShorthandShare/ShareViewController.swift b/ShorthandShare/ShareViewController.swift
+--- a/ShorthandShare/ShareViewController.swift
++++ b/ShorthandShare/ShareViewController.swift
+@@ -200,3 +200,3 @@
+     private func loadURL(from provider: NSItemProvider, completion: @escaping () -> Void) {
+-        let progress = provider.loadItem(
++        provider.loadItem(
+             forTypeIdentifier: UTType.url.identifier, options: nil
+@@ -217,3 +217,2 @@
+         }
+-        loadingProgresses.append(progress)
+     }
+@@ -221,3 +220,3 @@
+     private func loadText(from provider: NSItemProvider, completion: @escaping () -> Void) {
+-        let progress = provider.loadItem(
++        provider.loadItem(
+             forTypeIdentifier: UTType.plainText.identifier, options: nil
+@@ -233,3 +232,2 @@
+         }
+-        loadingProgresses.append(progress)
+     }
+@@ -237,3 +235,3 @@
+     private func loadHtml(from provider: NSItemProvider, completion: @escaping () -> Void) {
+-        let progress = provider.loadItem(
++        provider.loadItem(
+             forTypeIdentifier: UTType.html.identifier, options: nil
+@@ -250,3 +248,2 @@
+         }
+-        loadingProgresses.append(progress)
+     }

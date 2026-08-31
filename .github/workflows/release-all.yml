@@ -427,6 +427,22 @@ jobs:
           echo "Using compatible siyuan-ios commit: ${COMPATIBLE_COMMIT}"
           git -C siyuan-ios checkout --detach "${COMPATIBLE_COMMIT}"
 
+      - name: Apply iOS compatibility patches
+        working-directory: ${{ github.workspace }}/siyuan-ios
+        shell: bash
+        run: |
+          PATCH="${{ github.workspace }}/sy-build/patches/siyuan-ios/nsitemprovider-loaditem-void.patch"
+          SOURCE="ShorthandShare/ShareViewController.swift"
+          if git apply --check "$PATCH"; then
+            git apply --ignore-whitespace "$PATCH"
+            echo "Applied NSItemProvider.loadItem compatibility patch."
+          elif grep -q 'let progress = provider.loadItem(' "$SOURCE"; then
+            echo "Error: NSItemProvider.loadItem still returns Void, but the compatibility patch no longer applies."
+            exit 1
+          else
+            echo "Upstream no longer needs the NSItemProvider.loadItem compatibility patch."
+          fi
+
       - name: Apply unlock patches
         working-directory: ${{ github.workspace }}/siyuan
         shell: bash
