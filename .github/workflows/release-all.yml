@@ -147,12 +147,7 @@ jobs:
       - name: Apply unlock patches
         working-directory: ${{ github.workspace }}/siyuan
         shell: bash
-        run: |
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/disable-update.patch
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/default-config.patch
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/mock-vip-user.patch
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/hide-account-entry.patch
-          echo "Patches applied successfully."
+        run: bash ../sy-build/scripts/apply-patches.sh .
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -242,10 +237,7 @@ jobs:
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
           cd siyuan
 
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+          bash ${{ github.workspace }}/sy-build/scripts/apply-patches.sh .
 
           cd ..
 
@@ -446,12 +438,7 @@ jobs:
       - name: Apply unlock patches
         working-directory: ${{ github.workspace }}/siyuan
         shell: bash
-        run: |
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/disable-update.patch
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/default-config.patch
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/mock-vip-user.patch
-          git apply --ignore-whitespace ../sy-build/patches/siyuan/hide-account-entry.patch
-          echo "Patches applied successfully."
+        run: bash ../sy-build/scripts/apply-patches.sh .
 
       - name: Fix iOS AppIcon and Project Settings
         working-directory: ${{ github.workspace }}/siyuan-ios
@@ -567,10 +554,7 @@ jobs:
         run: |
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
           cd siyuan
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/disable-update.patch
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/default-config.patch
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/mock-vip-user.patch
-          git apply --ignore-whitespace ${{ github.workspace }}/sy-build/patches/siyuan/hide-account-entry.patch
+          bash ${{ github.workspace }}/sy-build/scripts/apply-patches.sh .
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
