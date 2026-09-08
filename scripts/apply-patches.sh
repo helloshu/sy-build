@@ -5,6 +5,7 @@
 #   补丁目录默认为本脚本 ../patches/siyuan，目录内所有 *.patch 按文件名顺序应用。
 #
 # 每个补丁的应用策略:
+#   所有 git apply 调用都使用 --recount，根据补丁正文重算 hunk 行数，避免过时的行数头静默遗漏尾部变更。
 #   1. 严格匹配: git apply --ignore-whitespace（完整上下文校验）
 #   2. 宽松匹配: git apply --ignore-whitespace -C1（上游在补丁上下文处有漂移时,
 #      仍要求至少 1 行上下文 + 被修改行本身完全一致, 不会盲目套用）
@@ -39,19 +40,19 @@ fail=0
 applied=0
 for p in "${patches[@]}"; do
   name="$(basename "$p")"
-  if git apply --ignore-whitespace "$p" 2>/dev/null; then
+  if git apply --recount --ignore-whitespace "$p" 2>/dev/null; then
     echo "[patches] $name 已应用 (严格匹配)"
     applied=$((applied + 1))
-  elif git apply --ignore-whitespace -C1 "$p" 2>/dev/null; then
+  elif git apply --recount --ignore-whitespace -C1 "$p" 2>/dev/null; then
     echo "[patches] $name 已应用 (宽松匹配: 上游代码在补丁上下文处有漂移)"
     applied=$((applied + 1))
-  elif git apply --ignore-whitespace --check --reverse "$p" 2>/dev/null \
-    || git apply --ignore-whitespace -C1 --check --reverse "$p" 2>/dev/null; then
+  elif git apply --recount --ignore-whitespace --check --reverse "$p" 2>/dev/null \
+    || git apply --recount --ignore-whitespace -C1 --check --reverse "$p" 2>/dev/null; then
     echo "[patches] $name 已应用过, 跳过"
   else
     echo "[patches] ERROR: $name 无法应用" >&2
     echo "  补丁的目标代码行已被上游修改, 需要人工更新补丁后重试:" >&2
-    git apply --ignore-whitespace "$p" 2>&1 | sed 's/^/    /' >&2
+    git apply --recount --ignore-whitespace "$p" 2>&1 | sed 's/^/    /' >&2
     fail=1
   fi
 done

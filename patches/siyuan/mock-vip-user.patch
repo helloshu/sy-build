@@ -2,7 +2,7 @@ diff --git forkSrcPrefix/app/src/util/needSubscribe.ts forkDstPrefix/app/src/uti
 index 8681b9e..9efbe97 100644
 --- forkSrcPrefix/app/src/util/needSubscribe.ts
 +++ forkDstPrefix/app/src/util/needSubscribe.ts
-@@ -1,19 +1,6 @@
+@@ -1,24 +1,11 @@
 -import {showMessage} from "../dialog/message";
 -import {getCloudURL} from "../config/util/about";
 -import {isInIOS} from "../protyle/util/compatibility";
