@@ -264,6 +264,8 @@ jobs:
           c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
           assert 'signingConfigs {' in c, 'ERROR: signingConfigs block injection failed - upstream may have changed build.gradle'
           assert 'signingConfig signingConfigs.release' in c, 'ERROR: signingConfig ref replacement failed - upstream may have changed build.gradle'
+          assert 'implementation files(\\'libs/kernel.aar\\')' in c, 'ERROR: local kernel.aar dependency replacement failed - upstream may have changed build.gradle'
+          assert 'implementation(name: \\'kernel\\', ext: \\'aar\\')' not in c, 'ERROR: upstream kernel AAR dependency is still present'
           with open('app/build.gradle', 'w', encoding='utf-8') as f:
               f.write(c)
           "
@@ -323,6 +325,8 @@ jobs:
             echo "Using NDK: $ANDROID_NDK_HOME"
           fi
           gomobile bind --tags "fts5 sqlcipher" -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
+          test -s "${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
+          sha256sum "${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         env:
           GO111MODULE: on
@@ -332,12 +336,16 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ github.workspace }}/siyuan-android/app/src/main/assets/
+          test -f "${{ github.workspace }}/siyuan/app/stage/build/mobile/index.html"
+          rm -f "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
           cd ${{ github.workspace }}/siyuan/app
-          zip -r ${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip ./appearance ./guide ./stage
+          zip -r "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip" ./appearance ./guide ./stage
           cd ${{ github.workspace }}/siyuan
           if [ -d "changelogs" ]; then
-            zip -rg ${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip ./changelogs
+            zip -rg "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip" ./changelogs
           fi
+          test -s "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
+          unzip -tqq "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
 
       - name: Decode Keystore
         id: decode_keystore

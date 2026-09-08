@@ -1,0 +1,74 @@
+diff --git a/app/src/onboarding/index.ts b/app/src/onboarding/index.ts
+--- a/app/src/onboarding/index.ts
++++ b/app/src/onboarding/index.ts
+@@ -3,8 +3,6 @@ import {fetchPost, fetchSyncPost} from "../util/fetch";
+ import {openDataMigration} from "../menus/dataMigration";
+ import {mountHelp} from "../util/mount";
+ import {syncGuide} from "../sync/syncGuide";
+-import {openSetting} from "../config";
+-import {isPaidUser} from "../util/needSubscribe";
+ import {parseUriInfo, setNoteBook} from "../util/pathName";
+ import type {App} from "../index";
+ import {getHostCapabilities} from "../util/hostCapabilities";
+@@ -38,15 +36,10 @@ const shouldShowOnboarding = () => {
+ };
+
+-let pendingLoginHandler: (() => void) | undefined;
+ let pendingSyncHandler: (() => void) | undefined;
+ let mobileKeyboardHandler: EventListener | undefined;
+ let openingOnboardingDocument = false;
+
+ const dismissOnboarding = () => {
+-    if (pendingLoginHandler) {
+-        window.removeEventListener("siyuan-login-success", pendingLoginHandler);
+-        pendingLoginHandler = undefined;
+-    }
+     if (pendingSyncHandler) {
+         window.removeEventListener("siyuan-sync-success", pendingSyncHandler);
+         pendingSyncHandler = undefined;
+@@ -74,28 +67,6 @@ const syncAndDismissOnSuccess = (app: App) => {
+     syncGuide(app);
+ };
+
+-const loginAndSync = (app: App) => {
+-    if (window.siyuan.user) {
+-        if (isPaidUser()) {
+-            syncAndDismissOnSuccess(app);
+-        } else {
+-            syncGuide(app);
+-        }
+-        return;
+-    }
+-    if (pendingLoginHandler) {
+-        window.removeEventListener("siyuan-login-success", pendingLoginHandler);
+-    }
+-    pendingLoginHandler = () => {
+-        pendingLoginHandler = undefined;
+-        if (isPaidUser()) {
+-            syncAndDismissOnSuccess(app);
+-        }
+-    };
+-    window.addEventListener("siyuan-login-success", pendingLoginHandler, {once: true});
+-    openSetting(app, "sync");
+-};
+-
+ const renderOnboarding = (app: App) => {
+     if (!shouldShowOnboarding() || document.querySelector(".onboarding")) {
+         return;
+@@ -112,6 +84,6 @@ const renderOnboarding = (app: App) => {
+ </button>` : ""}
+ <button class="b3-button b3-button--outline fn__block" data-type="sync">
+-    <svg><use xlink:href="#iconCloud"></use></svg>${window.siyuan.languages.loginAndSync}
++    <svg><use xlink:href="#iconCloud"></use></svg>${window.siyuan.languages.cloudSync}
+ </button>
+ <button class="b3-button b3-button--outline fn__block" data-type="guide">
+     <svg><use xlink:href="#iconHelp"></use></svg>${window.siyuan.languages.userGuide}
+@@ -135,7 +107,7 @@ const renderOnboarding = (app: App) => {
+                 }
+                 break;
+             case "sync":
+-                loginAndSync(app);
++                syncAndDismissOnSuccess(app);
+                 break;
+             case "guide":
+                 mountHelp();
