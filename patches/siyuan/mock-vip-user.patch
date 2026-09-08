@@ -1,11 +1,13 @@
 diff --git forkSrcPrefix/app/src/util/needSubscribe.ts forkDstPrefix/app/src/util/needSubscribe.ts
-index 8681b9e..0cd43fa 100644
+index 8681b9e..9efbe97 100644
 --- forkSrcPrefix/app/src/util/needSubscribe.ts
 +++ forkDstPrefix/app/src/util/needSubscribe.ts
-@@ -3,22 +3,12 @@ import {getCloudURL} from "../config/util/about";
- import {isInIOS} from "../protyle/util/compatibility";
- 
- export const needSubscribe = (tip = window.siyuan.languages._kernel[29]) => {
+@@ -1,19 +1,6 @@
+-import {showMessage} from "../dialog/message";
+-import {getCloudURL} from "../config/util/about";
+-import {isInIOS} from "../protyle/util/compatibility";
+-
+-export const needSubscribe = (tip = window.siyuan.languages._kernel[29]) => {
 -    if (window.siyuan.user && (window.siyuan.user.userSiYuanProExpireTime === -1 || window.siyuan.user.userSiYuanProExpireTime > 0)) {
 -        // 终身会员或订阅未过期
 -        return false;
@@ -17,6 +19,8 @@ index 8681b9e..0cd43fa 100644
 -        showMessage(tip);
 -    }
 -    return true;
++export const needSubscribe = (tip?: string) => {
++    void tip;
 +    return false;
  };
  

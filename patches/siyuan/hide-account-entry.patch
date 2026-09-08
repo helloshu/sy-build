@@ -25,10 +25,10 @@ diff --git forkSrcPrefix/app/src/layout/topBar.ts forkDstPrefix/app/src/layout/t
  import {openSearch} from "../search/spread";
  import type {App} from "../index";
  /// #if !BROWSER
-@@ -216,9 +215,6 @@ export const initBar = (app: App) => {
+@@ -235,9 +234,6 @@ export const initBar = (app: App) => {
                  event.stopPropagation();
                  break;
-             } else if (targetId === "toolbarVIP") {
+            } else if (targetId === "toolbarVIP" || targetId === "toolbarTitle") {
 -                if (!window.siyuan.config.readonly) {
 -                    openSetting(app, "sync");
 -                }

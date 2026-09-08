@@ -248,7 +248,7 @@ index 2aefe12..1a2507b 100644
  			util.PushMsg(Conf.Language(124), 5000)
  		}
  		return false
-@@ -357,23 +408,36 @@ func checkSync(boot, exit, byHand bool) bool {
+@@ -357,12 +408,19 @@ func checkSync(boot, exit, byHand bool) bool {
  
  	if !cloud.IsValidCloudDirName(Conf.Sync.CloudName) {
  		if byHand {
@@ -269,7 +269,7 @@ index 2aefe12..1a2507b 100644
 +	}
  
  	switch Conf.Sync.Provider {
- 	case conf.ProviderSiYuan:
+@@ -374,5 +432,8 @@ func checkSync(boot, exit, byHand bool) bool {
  		if !IsSubscriber() {
 +			if byHand {
 +				logging.LogWarnf("[sync-diag] checkSync skipped [reason=subscription-gate, provider=%d]", Conf.Sync.Provider)
@@ -278,7 +278,7 @@ index 2aefe12..1a2507b 100644
  			Conf.Save()
  			return false
  		}
- 	case conf.ProviderWebDAV, conf.ProviderS3, conf.ProviderLocal:
+@@ -380,5 +441,8 @@ func checkSync(boot, exit, byHand bool) bool {
  		if !IsPaidUser() {
 +			if byHand {
 +				logging.LogWarnf("[sync-diag] checkSync skipped [reason=paid-user-gate, provider=%d, endpointPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent())
@@ -286,9 +286,8 @@ index 2aefe12..1a2507b 100644
  			Conf.Sync.Enabled = false
  			Conf.Save()
  			return false
-@@ -381,14 +445,31 @@ func checkSync(boot, exit, byHand bool) bool {
- 	}
- 
+ 		}
+@@ -387,12 +451,29 @@ func checkSync(boot, exit, byHand bool) bool {
  	if 7 < autoSyncErrCount && !byHand {
 -		logging.LogErrorf("failed to auto-sync too many times, delay auto-sync 64 minutes")
 +		logging.LogErrorf("[sync-diag] checkSync skipped [reason=auto-error-limit, errorCount=%d]", autoSyncErrCount)

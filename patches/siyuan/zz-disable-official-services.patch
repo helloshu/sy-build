@@ -1,5 +1,20 @@
+diff --git a/kernel/mobile/kernel.go b/kernel/mobile/kernel.go
+index 415ca10..b1691f0 100644
+--- a/kernel/mobile/kernel.go
++++ b/kernel/mobile/kernel.go
+@@ -129,6 +129,10 @@ func GetExportFileName(exportPath string) string {
+ // -8：校验 transaction 失败
+ // -9：未知的商品
+ func VerifyAppStoreTransaction(accountToken, transactionID string) (retCode int) {
++	if util.OfficialCloudServicesDisabled {
++		return -2
++	}
++
+ 	retCode = -2
+ 	retMsg := "unknown error"
+ 
 diff --git a/kernel/model/bazaar_rating.go b/kernel/model/bazaar_rating.go
-index ef35be8..e3828a0 100644
+index 5c44240..4635538 100644
 --- a/kernel/model/bazaar_rating.go
 +++ b/kernel/model/bazaar_rating.go
 @@ -249,6 +249,9 @@ func validateBazaarPackageRatingRequest0(ctx context.Context, pkgType, packageNa
@@ -13,7 +28,7 @@ index ef35be8..e3828a0 100644
  	if nil == user || "" == user.UserToken {
  		return "", errors.New(Conf.Language(31))
 diff --git a/kernel/model/cloud_service.go b/kernel/model/cloud_service.go
-index 277058b..f2477d5 100644
+index 5762a50..75e7757 100644
 --- a/kernel/model/cloud_service.go
 +++ b/kernel/model/cloud_service.go
 @@ -37,9 +37,19 @@ import (
@@ -34,40 +49,40 @@ index 277058b..f2477d5 100644
 +		err = ErrOfficialCloudServicesDisabled
 +		return
 +	}
- 	if nil == Conf.GetUser() {
+ 	user := Conf.GetUser()
+ 	if nil == user {
  		return
- 	}
-@@ -100,6 +110,9 @@ func CloudChatGPT(msg string, contextMsgs []string) (ret string, stop bool, err
+@@ -109,6 +119,9 @@ func CloudChatGPT(msg string, contextMsgs []string) (ret string, stop bool, err
  }
  
  func StartFreeTrial() (err error) {
 +	if officialCloudServicesDisabled {
 +		return ErrOfficialCloudServicesDisabled
 +	}
- 	if nil == Conf.GetUser() {
+ 	user := Conf.GetUser()
+ 	if user == nil {
  		return errors.New(Conf.Language(31))
- 	}
-@@ -128,6 +141,9 @@ func StartFreeTrial() (err error) {
+@@ -142,6 +155,9 @@ func StartFreeTrial() (err error) {
  }
  
  func DeactivateUser() (err error) {
 +	if officialCloudServicesDisabled {
 +		return ErrOfficialCloudServicesDisabled
 +	}
- 	requestResult := gulu.Ret.NewResult()
- 	request := httpclient.NewCloudRequest30s()
- 	resp, err := request.
-@@ -152,6 +168,9 @@ func DeactivateUser() (err error) {
+ 	release := lockAssetSourceChange()
+ 	defer release()
+ 	if Conf.Sync.Provider == conf.ProviderSiYuan {
+@@ -183,6 +199,9 @@ func DeactivateUser() (err error) {
  }
  
  func SetCloudBlockReminder(id, data string, timed int64) (err error) {
 +	if officialCloudServicesDisabled {
 +		return ErrOfficialCloudServicesDisabled
 +	}
- 	requestResult := gulu.Ret.NewResult()
- 	payload := map[string]any{"dataId": id, "data": data, "timed": timed}
- 	request := httpclient.NewCloudRequest30s()
-@@ -181,6 +200,9 @@ var uploadToken = ""
+ 	user := Conf.GetUser()
+ 	if user == nil {
+ 		return errors.New(Conf.Language(31))
+@@ -222,6 +241,9 @@ var uploadToken = ""
  var uploadTokenTime int64
  
  func LoadUploadToken() (err error) {
@@ -77,7 +92,7 @@ index 277058b..f2477d5 100644
  	now := time.Now().Unix()
  	if 3600 >= now-uploadTokenTime {
  		return
-@@ -218,8 +240,6 @@ var (
+@@ -269,8 +291,6 @@ var (
  )
  
  func RefreshCheckJob2H() {
@@ -86,27 +101,27 @@ index 277058b..f2477d5 100644
  	go refreshAnnouncement()
  }
  
-@@ -344,6 +364,9 @@ func refreshAnnouncement() {
+@@ -395,6 +415,9 @@ func refreshAnnouncement() {
  }
  
  func RefreshUser(token string) (ret *conf.User, err error) {
 +	if officialCloudServicesDisabled {
 +		return Conf.GetUser(), nil
 +	}
+ 	release := lockAssetSourceChange()
+ 	defer release()
  	previousUserID := ""
- 	if previousUser := Conf.GetUser(); nil != previousUser {
- 		previousUserID = previousUser.UserId
-@@ -444,6 +467,9 @@ func loadUserFromConf() *conf.User {
+@@ -545,6 +568,9 @@ func loadUserFromConf() *conf.User {
  }
  
  func RemoveCloudShorthands(ids []string) (err error) {
 +	if officialCloudServicesDisabled {
 +		return ErrOfficialCloudServicesDisabled
 +	}
- 	result := map[string]any{}
- 	request := httpclient.NewCloudRequest30s()
- 	body := map[string]any{
-@@ -475,6 +501,10 @@ func RemoveCloudShorthands(ids []string) (err error) {
+ 	user := Conf.GetUser()
+ 	if user == nil {
+ 		return errors.New(Conf.Language(31))
+@@ -586,6 +612,10 @@ func RemoveCloudShorthands(ids []string) (err error) {
  }
  
  func GetCloudShorthand(id string) (ret map[string]any, err error) {
@@ -114,10 +129,10 @@ index 277058b..f2477d5 100644
 +		err = ErrOfficialCloudServicesDisabled
 +		return
 +	}
- 	result := map[string]any{}
- 	request := httpclient.NewCloudRequest30s()
- 	resp, err := request.
-@@ -516,6 +546,10 @@ func GetCloudShorthand(id string) (ret map[string]any, err error) {
+ 	user := Conf.GetUser()
+ 	if user == nil {
+ 		return nil, errors.New(Conf.Language(31))
+@@ -637,6 +667,10 @@ func GetCloudShorthand(id string) (ret map[string]any, err error) {
  }
  
  func GetCloudShorthands(page int) (result map[string]any, err error) {
@@ -125,10 +140,10 @@ index 277058b..f2477d5 100644
 +		err = ErrOfficialCloudServicesDisabled
 +		return
 +	}
- 	result = map[string]any{}
- 	request := httpclient.NewCloudRequest30s()
- 	resp, err := request.
-@@ -576,6 +610,9 @@ var (
+ 	user := Conf.GetUser()
+ 	if user == nil {
+ 		return nil, errors.New(Conf.Language(31))
+@@ -707,6 +741,9 @@ var (
  )
  
  func getUser(token string) (*conf.User, error) {
@@ -138,7 +153,7 @@ index 277058b..f2477d5 100644
  	result := map[string]any{}
  	request := httpclient.NewCloudRequest30s().SetRetryCount(0)
  	resp, err := request.
-@@ -611,6 +648,9 @@ func getUser(token string) (*conf.User, error) {
+@@ -745,6 +782,9 @@ func getUser(token string) (*conf.User, error) {
  }
  
  func UseActivationcode(code string) (err error) {
@@ -148,7 +163,7 @@ index 277058b..f2477d5 100644
  	code = util.RemoveInvalid(code)
  	code = strings.TrimSpace(code)
  	if "" == code {
-@@ -638,6 +678,9 @@ func UseActivationcode(code string) (err error) {
+@@ -781,6 +821,9 @@ func UseActivationcode(code string) (err error) {
  }
  
  func CheckActivationcode(code string) (retCode int, msg string) {
@@ -158,17 +173,17 @@ index 277058b..f2477d5 100644
  	code = util.RemoveInvalid(code)
  	code = strings.TrimSpace(code)
  	if "" == code {
-@@ -671,6 +714,9 @@ func CheckActivationcode(code string) (retCode int, msg string) {
+@@ -823,6 +866,9 @@ func CheckActivationcode(code string) (retCode int, msg string) {
  }
  
  func Login(userName, password, captcha string, cloudRegion int) (ret *gulu.Result) {
 +	if officialCloudServicesDisabled {
 +		return officialCloudDisabledResult()
 +	}
+ 	release := lockAssetSourceChange()
+ 	defer release()
  	previousCloudRegion := util.CurrentCloudRegion
- 	Conf.CloudRegion = cloudRegion
- 	Conf.Save()
-@@ -716,6 +762,9 @@ func Login(userName, password, captcha string, cloudRegion int) (ret *gulu.Resul
+@@ -881,6 +927,9 @@ func Login(userName, password, captcha string, cloudRegion int) (ret *gulu.Resul
  }
  
  func Login2fa(token, code string) (ret *gulu.Result) {
@@ -176,9 +191,9 @@ index 277058b..f2477d5 100644
 +		return officialCloudDisabledResult()
 +	}
  	result := map[string]any{}
- 	request := httpclient.NewCloudRequest30s()
- 	resp, err := request.
-@@ -747,6 +796,13 @@ func failedLogin2faResult() *gulu.Result {
+ 	// 两步验证登录不是幂等操作，关闭自动重试以避免重复登录。
+ 	request := httpclient.NewCloudRequest30s().SetRetryCount(0)
+@@ -913,6 +962,13 @@ func failedLogin2faResult() *gulu.Result {
  	return ret
  }
  
@@ -192,43 +207,58 @@ index 277058b..f2477d5 100644
  func parseLogin2faResult(result map[string]any) (ret *gulu.Result, ok bool) {
  	code, codeOK := result["code"].(float64)
  	msg, msgOK := result["msg"].(string)
+diff --git a/kernel/model/export.go b/kernel/model/export.go
+index 60ed55a..7ccb9c4 100644
+--- a/kernel/model/export.go
++++ b/kernel/model/export.go
+@@ -407,6 +407,10 @@ func ExportAv2CSV(avID, blockID string) (zipPath string, err error) {
+ }
+ 
+ func Export2Liandi(id string) (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
++
+ 	if err = prepareExportBlockAssets(id, false); err != nil {
+ 		return
+ 	}
 diff --git a/kernel/model/repository.go b/kernel/model/repository.go
-index e6076ce..4d8549a 100644
+index 353fca0..2bcfd13 100644
 --- a/kernel/model/repository.go
 +++ b/kernel/model/repository.go
-@@ -1416,6 +1416,9 @@ func appendAgentRollbackEntries() {
- }
- 
+@@ -1453,6 +1453,9 @@ func appendAgentRollbackEntries() {
  func DownloadCloudSnapshot(tag, id string) (err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1458,6 +1461,9 @@ func DownloadCloudSnapshot(tag, id string) (err error) {
- }
- 
+@@ -1499,6 +1502,9 @@ func DownloadCloudSnapshot(tag, id string) (err error) {
  func UploadCloudSnapshot(tag, id string) (err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1499,6 +1505,9 @@ func UploadCloudSnapshot(tag, id string) (err error) {
- }
- 
+@@ -1545,6 +1551,9 @@ func UploadCloudSnapshot(tag, id string) (err error) {
  func RemoveCloudRepoTag(tag string) (err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1531,6 +1540,10 @@ func RemoveCloudRepoTag(tag string) (err error) {
- 
- func GetCloudRepoTagSnapshots() (ret []*dejavu.Log, err error) {
+@@ -1581,6 +1590,10 @@ func GetCloudRepoTagSnapshots() (ret []*dejavu.Log, err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
  	ret = []*dejavu.Log{}
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		err = ErrOfficialCloudServicesDisabled
@@ -237,9 +267,9 @@ index e6076ce..4d8549a 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1567,6 +1580,10 @@ func GetCloudRepoTagSnapshots() (ret []*dejavu.Log, err error) {
- 
- func GetCloudRepoSnapshots(page int) (ret []*dejavu.Log, pageCount, totalCount int, err error) {
+@@ -1621,6 +1634,10 @@ func GetCloudRepoSnapshots(page int) (ret []*dejavu.Log, pageCount, totalCount i
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
  	ret = []*dejavu.Log{}
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		err = ErrOfficialCloudServicesDisabled
@@ -248,21 +278,21 @@ index e6076ce..4d8549a 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -3098,6 +3115,9 @@ func GetCloudSpace() (s *Sync, b *Backup, hSize, hAssetSize, hTotalSize, hExchan
- }
- 
+@@ -3308,6 +3325,9 @@ func GetCloudSpace() (s *Sync, b *Backup, hSize, hAssetSize, hTotalSize, hExchan
  func getCloudSpace() (stat *cloud.Stat, err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		return nil, ErrOfficialCloudServicesDisabled
 +	}
- 	repo, err := newRepository()
- 	if err != nil {
- 		return
+ 	handleCloudError := cloudRepoErrorHandler()
+ 	defer func() { handleCloudError(err) }()
+ 	repo, err := newRepositoryWithAssetSourceLocked()
 diff --git a/kernel/model/sync.go b/kernel/model/sync.go
-index 1a2507b..e7518c5 100644
+index 190ce75..cfad2b5 100644
 --- a/kernel/model/sync.go
 +++ b/kernel/model/sync.go
-@@ -425,6 +425,12 @@ func checkSync(boot, exit, byHand bool) bool {
+@@ -429,6 +429,12 @@ func checkSync(boot, exit, byHand bool) bool {
  
  	switch Conf.Sync.Provider {
  	case conf.ProviderSiYuan:
@@ -275,39 +305,39 @@ index 1a2507b..e7518c5 100644
  		if !IsSubscriber() {
  			if byHand {
  				logging.LogWarnf("[sync-diag] checkSync skipped [reason=subscription-gate, provider=%d]", Conf.Sync.Provider)
-@@ -643,6 +649,9 @@ func SetSyncMode(mode int) {
+@@ -652,6 +658,9 @@ func SetSyncMode(mode int) {
  }
  
  func SetSyncProvider(provider int) (err error) {
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
- 	Conf.Sync.Provider = provider
- 	Conf.Save()
- 	refreshLANSyncManager()
-@@ -737,6 +746,9 @@ var (
- )
- 
+ 	release := lockAssetSourceChange()
+ 	defer release()
+ 	if provider != Conf.Sync.Provider {
+@@ -779,6 +788,9 @@ var (
  func CreateCloudSyncDir(name string) (err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
  	switch Conf.Sync.Provider {
  	case conf.ProviderSiYuan, conf.ProviderLocal:
  		break
-@@ -764,6 +776,9 @@ func CreateCloudSyncDir(name string) (err error) {
- }
- 
+@@ -811,6 +823,9 @@ func CreateCloudSyncDir(name string) (err error) {
  func RemoveCloudSyncDir(name string) (err error) {
+ 	release := lockAssetSourceChange()
+ 	defer release()
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
- 	switch Conf.Sync.Provider {
- 	case conf.ProviderSiYuan, conf.ProviderLocal:
- 		break
-@@ -797,6 +812,10 @@ func RemoveCloudSyncDir(name string) (err error) {
- 
- func ListCloudSyncDir() (syncDirs []*Sync, hSize string, err error) {
+ 	if name == Conf.Sync.CloudName {
+ 		if err = requireCompleteAssetDownloads(); err != nil {
+ 			return
+@@ -854,6 +869,10 @@ func ListCloudSyncDir() (syncDirs []*Sync, hSize string, err error) {
+ 	assetDownloadSourceMu.RLock()
+ 	defer assetDownloadSourceMu.RUnlock()
  	syncDirs = []*Sync{}
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Provider {
 +		err = ErrOfficialCloudServicesDisabled
@@ -316,7 +346,7 @@ index 1a2507b..e7518c5 100644
  	var dirs []*cloud.Repo
  	var size int64
  
-@@ -1064,6 +1083,9 @@ func closeSyncWebSocket() {
+@@ -1124,6 +1143,9 @@ func closeSyncWebSocket() {
  func connectSyncWebSocket() {
  	defer logging.Recover()
  
@@ -326,35 +356,8 @@ index 1a2507b..e7518c5 100644
  	if !Conf.Sync.Enabled || !IsSubscriber() || conf.ProviderSiYuan != Conf.Sync.Provider {
  		return
  	}
-diff --git a/kernel/mobile/kernel.go b/kernel/mobile/kernel.go
---- a/kernel/mobile/kernel.go
-+++ b/kernel/mobile/kernel.go
-@@ -128,6 +128,10 @@ func SetTimezone(timezoneID string) {
- // -8：校验 transaction 失败
- // -9：未知的商品
- func VerifyAppStoreTransaction(accountToken, transactionID string) (retCode int) {
-+	if util.OfficialCloudServicesDisabled {
-+		return -2
-+	}
-+
- 	retCode = -2
- 	retMsg := "unknown error"
- 
-diff --git a/kernel/model/export.go b/kernel/model/export.go
---- a/kernel/model/export.go
-+++ b/kernel/model/export.go
-@@ -379,6 +379,10 @@ func ExportTree(id string) (zipPath string, err error) {
- }
- 
- func Export2Liandi(id string) (err error) {
-+	if officialCloudServicesDisabled {
-+		return ErrOfficialCloudServicesDisabled
-+	}
-+
- 	err = withExportReadLockByBlockID(id, func() error {
- 		tree, loadErr := LoadTreeByBlockID(id)
- 		if loadErr != nil {
 diff --git a/kernel/util/rhy.go b/kernel/util/rhy.go
+index 73fbe78..4313797 100644
 --- a/kernel/util/rhy.go
 +++ b/kernel/util/rhy.go
 @@ -27,6 +27,8 @@ import (
@@ -366,7 +369,7 @@ diff --git a/kernel/util/rhy.go b/kernel/util/rhy.go
  var (
  	RhyCacheDuration = int64(3600 * 6)
  
-@@ -48,6 +50,10 @@ func RefreshRhyResultJob() {
+@@ -51,6 +53,10 @@ func RefreshRhyResultJob() {
  }
  
  func GetRhyResult(ctx context.Context, force bool) (map[string]any, error) {
