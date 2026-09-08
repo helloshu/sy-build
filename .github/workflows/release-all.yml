@@ -228,47 +228,174 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: sy-build
+          ref: ${{ github.sha }}
 
       - name: clone origin and apply patches
+        env:
+          SIYUAN_VERSION: ${{ needs.check-version.outputs.version }}
         run: |
+          set -euo pipefail
           mkdir -p ${{ github.workspace }}/go
           cd ${{ github.workspace }}
 
-          git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
+          git clone --branch "$SIYUAN_VERSION" --depth=1 https://github.com/siyuan-note/siyuan.git
           cd siyuan
 
           bash ${{ github.workspace }}/sy-build/scripts/apply-patches.sh .
+          SIYUAN_SHA="$(git rev-parse HEAD)"
 
           cd ..
 
-          git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan-android.git
+          git clone --branch "$SIYUAN_VERSION" --depth=1 https://github.com/siyuan-note/siyuan-android.git
           cd siyuan-android
+          SIYUAN_ANDROID_SHA="$(git rev-parse HEAD)"
+          SY_BUILD_SHA="$(git -C "${{ github.workspace }}/sy-build" rev-parse HEAD)"
+          if [ "$SY_BUILD_SHA" != "$GITHUB_SHA" ]; then
+            echo "ERROR: sy-build checkout SHA does not match GITHUB_SHA: expected $GITHUB_SHA, got $SY_BUILD_SHA"
+            exit 1
+          fi
+          export SIYUAN_SHA SIYUAN_ANDROID_SHA SY_BUILD_SHA
 
-          python3 -c "import os, re
-          for filename in ['build.gradle', 'settings.gradle']:
-              if os.path.exists(filename):
-                  with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
-                      content = f.read()
-                  new_content = re.sub(r\"maven\s*\{\s*url\s*['\\\"]https?://maven\.aliyun\.com[^}]+?\}\", \"// aliyun mirror removed\", content, flags=re.DOTALL)
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          def read_text(path):
+              with path.open("r", encoding="utf-8", newline="") as handle:
+                  return handle.read()
+
+          def write_text(path, content):
+              with path.open("w", encoding="utf-8", newline="") as handle:
+                  handle.write(content)
+
+          for filename in ("build.gradle", "settings.gradle"):
+              path = Path(filename)
+              if path.is_file():
+                  content = read_text(path)
+                  new_content = re.sub(
+                      r"maven\s*\{\s*url\s*['\"]https?://maven\.aliyun\.com[^}]+?\}",
+                      "// aliyun mirror removed",
+                      content,
+                      flags=re.DOTALL,
+                  )
                   if new_content != content:
-                      with open(filename, 'w', encoding='utf-8') as f:
-                          f.write(new_content)
-          with open('app/build.gradle', 'r', encoding='utf-8', errors='ignore') as f:
-              c = f.read()
-          c = c.replace('apply from: rootProject.file(\\'signings.gradle\\')', '//apply from: rootProject.file(\\'signings.gradle\\')')
-          c = c.replace('apply from: rootProject.file(\\'buildRelease.gradle\\')', '//apply from: rootProject.file(\\'buildRelease.gradle\\')')
-          c = c.replace('implementation(name: \\'kernel\\', ext: \\'aar\\')', 'implementation files(\\'libs/kernel.aar\\')')
-          block = '''\n    signingConfigs {\n        release {\n            def ksFile = new File(rootProject.projectDir, \"keystore/siyuan.jks\")\n            storeFile ksFile\n            storePassword \"123456\"\n            keyAlias \"siyuan\"\n            keyPassword \"123456\"\n        }\n    }\n'''
-          if 'android {' in c and 'signingConfigs {' not in c:
-              c = c.replace('android {', 'android {' + block)
-          c = c.replace('signingConfig signingConfigs.siyuanConfig', 'signingConfig signingConfigs.release')
-          assert 'signingConfigs {' in c, 'ERROR: signingConfigs block injection failed - upstream may have changed build.gradle'
-          assert 'signingConfig signingConfigs.release' in c, 'ERROR: signingConfig ref replacement failed - upstream may have changed build.gradle'
-          assert 'implementation files(\\'libs/kernel.aar\\')' in c, 'ERROR: local kernel.aar dependency replacement failed - upstream may have changed build.gradle'
-          assert 'implementation(name: \\'kernel\\', ext: \\'aar\\')' not in c, 'ERROR: upstream kernel AAR dependency is still present'
-          with open('app/build.gradle', 'w', encoding='utf-8') as f:
-              f.write(c)
-          "
+                      write_text(path, new_content)
+
+          root_path = Path("build.gradle")
+          if not root_path.is_file():
+              raise SystemExit("ERROR: upstream root build.gradle is missing")
+          root_content = read_text(root_path)
+          version_code_matches = list(
+              re.finditer(
+                  r"(?m)^([ \t]*(?:def[ \t]+)?siyuanVersionCode[ \t]*=[ \t]*)([0-9]+)(?=[ \t]*(?://[^\r\n]*)?(?:\r?\n|$))",
+                  root_content,
+              )
+          )
+          if len(version_code_matches) != 1:
+              raise SystemExit(
+                  "ERROR: expected exactly one integer siyuanVersionCode assignment in root build.gradle, "
+                  f"found {len(version_code_matches)}"
+              )
+          version_name_matches = list(
+              re.finditer(
+                  r"(?m)^[ \t]*(?:def[ \t]+)?siyuanVersionName[ \t]*=[ \t]*(['\"])([^'\"\r\n]+)\1[ \t]*(?://[^\r\n]*)?$",
+                  root_content,
+              )
+          )
+          if len(version_name_matches) != 1:
+              raise SystemExit(
+                  "ERROR: expected exactly one quoted siyuanVersionName assignment in root build.gradle, "
+                  f"found {len(version_name_matches)}"
+              )
+          base_version_code = int(version_code_matches[0].group(2))
+          run_number = int(os.environ.get("GITHUB_RUN_NUMBER", "0"))
+          if base_version_code <= 0 or run_number <= 0:
+              raise SystemExit(
+                  "ERROR: siyuanVersionCode and GITHUB_RUN_NUMBER must both be positive integers"
+              )
+          if run_number >= 100000:
+              raise SystemExit(
+                  "ERROR: GITHUB_RUN_NUMBER must be less than 100000 for the composite versionCode range"
+              )
+          version_code = base_version_code * 100000 + run_number
+          if version_code > 2100000000:
+              raise SystemExit(
+                  "ERROR: composed Android versionCode exceeds the Android maximum of 2100000000: "
+                  f"{version_code}"
+              )
+          version_name = version_name_matches[0].group(2)
+          match = version_code_matches[0]
+          rewritten_root = root_content[: match.start(2)] + str(version_code) + root_content[match.end(2) :]
+          rewritten_name_matches = list(
+              re.finditer(
+                  r"(?m)^[ \t]*(?:def[ \t]+)?siyuanVersionName[ \t]*=[ \t]*(['\"])([^'\"\r\n]+)\1[ \t]*(?://[^\r\n]*)?$",
+                  rewritten_root,
+              )
+          )
+          if len(rewritten_name_matches) != 1 or rewritten_name_matches[0].group(2) != version_name:
+              raise SystemExit("ERROR: versionName changed while rewriting root build.gradle")
+          write_text(root_path, rewritten_root)
+
+          app_path = Path("app/build.gradle")
+          if not app_path.is_file():
+              raise SystemExit("ERROR: upstream app/build.gradle is missing")
+          app_content = read_text(app_path)
+          app_content = app_content.replace(
+              "apply from: rootProject.file('signings.gradle')",
+              "//apply from: rootProject.file('signings.gradle')",
+          )
+          app_content = app_content.replace(
+              "apply from: rootProject.file('buildRelease.gradle')",
+              "//apply from: rootProject.file('buildRelease.gradle')",
+          )
+          app_content = app_content.replace(
+              "implementation(name: 'kernel', ext: 'aar')",
+              "implementation files('libs/kernel.aar')",
+          )
+          signing_block = '''
+              signingConfigs {
+                  release {
+                      def ksFile = new File(rootProject.projectDir, "keystore/siyuan.jks")
+                      storeFile ksFile
+                      storePassword System.getenv("KEYSTORE_PASSWORD") ?: "123456"
+                      keyAlias "siyuan"
+                      keyPassword System.getenv("KEYSTORE_PASSWORD") ?: "123456"
+                  }
+              }
+          '''
+          if "android {" in app_content and "signingConfigs {" not in app_content:
+              app_content = app_content.replace("android {", "android {" + signing_block, 1)
+          app_content = app_content.replace(
+              "signingConfig signingConfigs.siyuanConfig",
+              "signingConfig signingConfigs.release",
+          )
+          if "signingConfigs {" not in app_content:
+              raise SystemExit("ERROR: signingConfigs block injection failed - upstream may have changed app/build.gradle")
+          if "signingConfig signingConfigs.release" not in app_content:
+              raise SystemExit("ERROR: signingConfig ref replacement failed - upstream may have changed app/build.gradle")
+          if "implementation files('libs/kernel.aar')" not in app_content:
+              raise SystemExit("ERROR: local kernel.aar dependency replacement failed - upstream may have changed app/build.gradle")
+          if "implementation(name: 'kernel', ext: 'aar')" in app_content:
+              raise SystemExit("ERROR: upstream kernel AAR dependency is still present")
+          write_text(app_path, app_content)
+
+          env_file = os.environ.get("GITHUB_ENV")
+          if not env_file:
+              raise SystemExit("ERROR: GITHUB_ENV is unavailable")
+          with open(env_file, "a", encoding="utf-8") as handle:
+              handle.write(f"SY_BUILD_SHA={os.environ['SY_BUILD_SHA']}\n")
+              handle.write(f"SIYUAN_SHA={os.environ['SIYUAN_SHA']}\n")
+              handle.write(f"SIYUAN_ANDROID_SHA={os.environ['SIYUAN_ANDROID_SHA']}\n")
+              handle.write(f"ANDROID_BASE_VERSION_CODE={base_version_code}\n")
+              handle.write(f"ANDROID_VERSION_CODE={version_code}\n")
+              handle.write(f"ANDROID_VERSION_NAME={version_name}\n")
+          print(f"Resolved sy-build SHA: {os.environ['SY_BUILD_SHA']}")
+          print(f"Resolved siyuan SHA: {os.environ['SIYUAN_SHA']}")
+          print(f"Resolved siyuan-android SHA: {os.environ['SIYUAN_ANDROID_SHA']}")
+          print(f"Android versionName: {version_name}")
+          print(f"Android versionCode: {base_version_code} * 100000 + {run_number} = {version_code}")
+          PY
 
           mkdir -p app/src/main/assets/
           mkdir -p app/libs/
@@ -325,8 +452,11 @@ jobs:
             echo "Using NDK: $ANDROID_NDK_HOME"
           fi
           gomobile bind --tags "fts5 sqlcipher" -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
-          test -s "${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
-          sha256sum "${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
+          KERNEL_AAR_PATH="${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
+          test -s "$KERNEL_AAR_PATH"
+          KERNEL_AAR_SHA256="$(sha256sum "$KERNEL_AAR_PATH" | awk '{print $1}')"
+          echo "ANDROID_KERNEL_AAR_SHA256=$KERNEL_AAR_SHA256" >> "$GITHUB_ENV"
+          echo "kernel.aar SHA256: $KERNEL_AAR_SHA256"
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         env:
           GO111MODULE: on
@@ -346,24 +476,91 @@ jobs:
           fi
           test -s "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
           unzip -tqq "${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
+          APP_ZIP_PATH="${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
+          APP_ZIP_SHA256="$(sha256sum "$APP_ZIP_PATH" | awk '{print $1}')"
+          echo "ANDROID_APP_ZIP_SHA256=$APP_ZIP_SHA256" >> "$GITHUB_ENV"
+          echo "app.zip SHA256: $APP_ZIP_SHA256"
 
       - name: Decode Keystore
         id: decode_keystore
-        if: env.KEYSTORE != ''
-        env:
-          KEYSTORE: ${{ secrets.KEYSTORE }}
         uses: timheuer/base64-to-file@v1.2
         with:
           fileName: "siyuan.jks"
           fileDir: ${{ github.workspace }}/siyuan-android/keystore
           encodedString: ${{ secrets.KEYSTORE }}
 
-      - name: Generate Fallback Keystore if missing
+      - name: Verify Android signing key
+        shell: bash
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
         run: |
-          if [ ! -f "${{ github.workspace }}/siyuan-android/keystore/siyuan.jks" ]; then
-            mkdir -p ${{ github.workspace }}/siyuan-android/keystore
-            keytool -genkey -v -keystore ${{ github.workspace }}/siyuan-android/keystore/siyuan.jks -alias siyuan -keyalg RSA -keysize 2048 -validity 10000 -storepass 123456 -keypass 123456 -dname "CN=SiYuan, OU=Dev, O=SiYuan, L=City, S=State, C=US"
+          set -euo pipefail
+          KEYSTORE_PATH="${{ github.workspace }}/siyuan-android/keystore/siyuan.jks"
+          if [ ! -s "$KEYSTORE_PATH" ]; then
+            echo "ERROR: Android signing keystore is missing: $KEYSTORE_PATH"
+            exit 1
           fi
+          SIGNER_CERT_FILE="$(mktemp)"
+          trap 'rm -f "$SIGNER_CERT_FILE"' EXIT
+          keytool -exportcert \
+            -keystore "$KEYSTORE_PATH" \
+            -storepass:env KEYSTORE_PASSWORD \
+            -alias siyuan \
+            -file "$SIGNER_CERT_FILE" >/dev/null
+          test -s "$SIGNER_CERT_FILE"
+          ANDROID_SIGNER_SHA256="$(sha256sum "$SIGNER_CERT_FILE" | awk '{print $1}')"
+          echo "ANDROID_SIGNER_SHA256=$ANDROID_SIGNER_SHA256" >> "$GITHUB_ENV"
+          echo "Android signing certificate SHA-256: $ANDROID_SIGNER_SHA256"
+
+      - name: Write Android provenance asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PROVENANCE_PATH="${{ github.workspace }}/siyuan-android/app/src/main/assets/provenance.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          required = (
+              "GITHUB_RUN_ID",
+              "GITHUB_RUN_NUMBER",
+              "SY_BUILD_SHA",
+              "SIYUAN_SHA",
+              "SIYUAN_ANDROID_SHA",
+              "GITHUB_SHA",
+              "ANDROID_VERSION_NAME",
+              "ANDROID_VERSION_CODE",
+              "ANDROID_APP_ZIP_SHA256",
+              "ANDROID_KERNEL_AAR_SHA256",
+              "ANDROID_SIGNER_SHA256",
+          )
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              raise SystemExit("ERROR: missing Android provenance values: " + ", ".join(missing))
+          run_id = int(os.environ["GITHUB_RUN_ID"])
+          run_number = int(os.environ["GITHUB_RUN_NUMBER"])
+          version_code = int(os.environ["ANDROID_VERSION_CODE"])
+          if run_id <= 0 or run_number <= 0 or version_code <= 0:
+              raise SystemExit("ERROR: Android provenance numeric values must be positive")
+          data = {
+              "run_id": run_id,
+              "run_number": run_number,
+              "sy_build_sha": os.environ["SY_BUILD_SHA"],
+              "siyuan_sha": os.environ["SIYUAN_SHA"],
+              "siyuan_android_sha": os.environ["SIYUAN_ANDROID_SHA"],
+              "version_name": os.environ["ANDROID_VERSION_NAME"],
+              "version_code": version_code,
+              "app_zip_sha256": os.environ["ANDROID_APP_ZIP_SHA256"],
+              "kernel_aar_sha256": os.environ["ANDROID_KERNEL_AAR_SHA256"],
+              "signer_sha256": os.environ["ANDROID_SIGNER_SHA256"],
+          }
+          path = Path(os.environ["PROVENANCE_PATH"])
+          path.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+          print(f"Android provenance: {path}")
+          print(json.dumps(data, ensure_ascii=True, sort_keys=True))
+          PY
+          test -s "$PROVENANCE_PATH"
 
       - name: Building Android
         working-directory: ${{ github.workspace }}/siyuan-android
@@ -373,11 +570,137 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || '123456' }}
 
+      - name: Verify Android APK and publish provenance
+        id: verify_android_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_root="${{ github.workspace }}/siyuan-android/app/build/outputs/apk"
+          mapfile -d '' -t apk_candidates < <(find "$apk_root" -type f -path '*/release/siyuan-*.apk' -print0)
+          if (( ${#apk_candidates[@]} != 1 )); then
+            echo "ERROR: expected exactly one APK matching **/release/siyuan-*.apk, found ${#apk_candidates[@]}"
+            printf '%s\n' "${apk_candidates[@]}"
+            exit 1
+          fi
+          APK_PATH="${apk_candidates[0]}"
+          APP_ZIP_PATH="${{ github.workspace }}/siyuan-android/app/src/main/assets/app.zip"
+          KERNEL_AAR_PATH="${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
+          PROVENANCE_PATH="${{ github.workspace }}/siyuan-android/app/src/main/assets/provenance.json"
+          test -s "$APP_ZIP_PATH"
+          test -s "$KERNEL_AAR_PATH"
+          test -s "$PROVENANCE_PATH"
+          actual_app_zip_sha256="$(sha256sum "$APP_ZIP_PATH" | awk '{print $1}')"
+          actual_kernel_aar_sha256="$(sha256sum "$KERNEL_AAR_PATH" | awk '{print $1}')"
+          test "$actual_app_zip_sha256" = "$ANDROID_APP_ZIP_SHA256"
+          test "$actual_kernel_aar_sha256" = "$ANDROID_KERNEL_AAR_SHA256"
+
+          APKANALYZER_BIN="$(command -v apkanalyzer || true)"
+          if [ -z "$APKANALYZER_BIN" ] && [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/cmdline-tools" ]; then
+            while IFS= read -r candidate; do
+              if [ -x "$candidate" ]; then
+                APKANALYZER_BIN="$candidate"
+                break
+              fi
+            done < <(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/apkanalyzer' -print 2>/dev/null | sort -V)
+          fi
+          if [ -z "$APKANALYZER_BIN" ]; then
+            echo "ERROR: Android SDK apkanalyzer was not found"
+            exit 1
+          fi
+          manifest_application_id="$("$APKANALYZER_BIN" manifest application-id "$APK_PATH")"
+          manifest_version_code="$("$APKANALYZER_BIN" manifest version-code "$APK_PATH")"
+          manifest_version_name="$("$APKANALYZER_BIN" manifest version-name "$APK_PATH")"
+          if [ "$manifest_application_id" != "org.b3log.siyuan" ]; then
+            echo "ERROR: APK application-id mismatch: expected org.b3log.siyuan, got $manifest_application_id"
+            exit 1
+          fi
+          if [ "$manifest_version_code" != "$ANDROID_VERSION_CODE" ]; then
+            echo "ERROR: APK version-code mismatch: expected $ANDROID_VERSION_CODE, got $manifest_version_code"
+            exit 1
+          fi
+          if [ "$manifest_version_name" != "$ANDROID_VERSION_NAME" ]; then
+            echo "ERROR: APK version-name mismatch: expected $ANDROID_VERSION_NAME, got $manifest_version_name"
+            exit 1
+          fi
+          echo "APK manifest: application-id=$manifest_application_id version-code=$manifest_version_code version-name=$manifest_version_name"
+
+          APKSIGNER_BIN="$(command -v apksigner || true)"
+          if [ -z "$APKSIGNER_BIN" ] && [ -n "${ANDROID_HOME:-}" ] && [ -d "$ANDROID_HOME/build-tools" ]; then
+            while IFS= read -r candidate; do
+              if [ -x "$candidate" ]; then
+                APKSIGNER_BIN="$candidate"
+                break
+              fi
+            done < <(find "$ANDROID_HOME/build-tools" -type f -path '*/apksigner' -print 2>/dev/null | sort -V)
+          fi
+          if [ -z "$APKSIGNER_BIN" ]; then
+            echo "ERROR: Android SDK apksigner was not found"
+            exit 1
+          fi
+          signer_output="$("$APKSIGNER_BIN" verify --print-certs "$APK_PATH" 2>&1)"
+          if printf '%s\n' "$signer_output" | grep -Fq 'Signer #2'; then
+            echo "ERROR: APK contains an unexpected Signer #2"
+            exit 1
+          fi
+          signer_digest_count="$(printf '%s\n' "$signer_output" | grep -Ec '^Signer #1 certificate SHA-256 digest: .*$' || true)"
+          if [ "$signer_digest_count" -ne 1 ]; then
+            echo "ERROR: apksigner did not return exactly one Signer #1 SHA-256 certificate digest"
+            exit 1
+          fi
+          signer_digest_raw="$(printf '%s\n' "$signer_output" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+          apk_signer_sha256="$(printf '%s' "$signer_digest_raw" | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$apk_signer_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "ERROR: APK signer SHA-256 digest is not exactly 64 lowercase hexadecimal characters"
+            exit 1
+          fi
+          if [ "$apk_signer_sha256" != "$ANDROID_SIGNER_SHA256" ]; then
+            echo "ERROR: APK signer SHA-256 mismatch: expected $ANDROID_SIGNER_SHA256, got $apk_signer_sha256"
+            exit 1
+          fi
+          echo "APK signer certificate SHA-256: $apk_signer_sha256"
+
+          verify_dir="$(mktemp -d)"
+          trap 'rm -rf "$verify_dir"' EXIT
+          apk_unpacked="$verify_dir/apk"
+          mkdir -p "$apk_unpacked"
+          unzip -q "$APK_PATH" -d "$apk_unpacked"
+          test -f "$apk_unpacked/assets/app.zip"
+          test -f "$apk_unpacked/assets/provenance.json"
+          cmp -- "$APP_ZIP_PATH" "$apk_unpacked/assets/app.zip"
+          cmp -- "$PROVENANCE_PATH" "$apk_unpacked/assets/provenance.json"
+
+          if ! unzip -Z1 "$KERNEL_AAR_PATH" | grep -Fqx 'jni/arm64-v8a/libgojni.so'; then
+            echo "ERROR: kernel.aar does not contain jni/arm64-v8a/libgojni.so"
+            exit 1
+          fi
+          if ! unzip -Z1 "$APK_PATH" | grep -Fqx 'lib/arm64-v8a/libgojni.so'; then
+            echo "ERROR: APK does not contain lib/arm64-v8a/libgojni.so"
+            exit 1
+          fi
+          unzip -p "$KERNEL_AAR_PATH" 'jni/arm64-v8a/libgojni.so' > "$verify_dir/kernel-libgojni.so"
+          unzip -p "$APK_PATH" 'lib/arm64-v8a/libgojni.so' > "$verify_dir/apk-libgojni.so"
+          cmp -- "$verify_dir/kernel-libgojni.so" "$verify_dir/apk-libgojni.so"
+
+          jq -e --arg version_code "$ANDROID_VERSION_CODE" \
+            '.version_code == ($version_code | tonumber)' \
+            "$apk_unpacked/assets/provenance.json" >/dev/null
+          APK_SHA256="$(sha256sum "$APK_PATH" | awk '{print $1}')"
+          echo "ANDROID_APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
+          echo "ANDROID_APK_SHA256=$APK_SHA256" >> "$GITHUB_ENV"
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "apk_sha256=$APK_SHA256" >> "$GITHUB_OUTPUT"
+          echo "Android APK path: $APK_PATH"
+          echo "Android APK SHA256: $APK_SHA256"
+          echo "Android APK versionCode: $ANDROID_VERSION_CODE"
+          echo "Android APK provenance:"
+          jq -S . "$apk_unpacked/assets/provenance.json"
+
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ${{ github.workspace }}/siyuan-android/app/build/outputs/apk/**/release/siyuan-*.apk
+          path: ${{ steps.verify_android_apk.outputs.apk_path }}
+          if-no-files-found: error
 
   build-ios:
     needs: check-version
