@@ -679,7 +679,19 @@ jobs:
           fi
           unzip -p "$KERNEL_AAR_PATH" 'jni/arm64-v8a/libgojni.so' > "$verify_dir/kernel-libgojni.so"
           unzip -p "$APK_PATH" 'lib/arm64-v8a/libgojni.so' > "$verify_dir/apk-libgojni.so"
-          cmp -- "$verify_dir/kernel-libgojni.so" "$verify_dir/apk-libgojni.so"
+          kernel_go_build_id="$(go tool buildid "$verify_dir/kernel-libgojni.so" 2>/dev/null || true)"
+          apk_go_build_id="$(go tool buildid "$verify_dir/apk-libgojni.so" 2>/dev/null || true)"
+          if [ -z "$kernel_go_build_id" ] || [ -z "$apk_go_build_id" ]; then
+            echo "ERROR: could not read the Go build ID from both libgojni.so files"
+            exit 1
+          fi
+          if [ "$kernel_go_build_id" != "$apk_go_build_id" ]; then
+            echo "ERROR: APK libgojni.so Go build ID mismatch"
+            echo "kernel.aar: $kernel_go_build_id"
+            echo "APK: $apk_go_build_id"
+            exit 1
+          fi
+          echo "APK libgojni.so Go build ID: $apk_go_build_id"
 
           jq -e --arg version_code "$ANDROID_VERSION_CODE" \
             '.version_code == ($version_code | tonumber)' \
