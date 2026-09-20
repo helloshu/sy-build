@@ -1,38 +1,8 @@
-diff --git forkSrcPrefix/kernel/conf/sync.go forkDstPrefix/kernel/conf/sync.go
-index 488cb9e5701adc964635376373202516656b1f9a..4e2a457fe7ff2dec817c2e0ae9de610d1412cbd3 100644
---- forkSrcPrefix/kernel/conf/sync.go
-+++ forkDstPrefix/kernel/conf/sync.go
-@@ -38,9 +38,9 @@ func NewSync() *Sync {
- 		Enabled:             false,
- 		Perception:          false,
- 		Mode:                1,
--		GenerateConflictDoc: false,
--		Provider:            ProviderSiYuan,
-+		GenerateConflictDoc: true,
-+		Provider:            ProviderS3,
- 		Interval:            30,
- 		LAN:                 &LANSync{MaxConcurrentReqs: 16},
- 	}
- }
-diff --git forkSrcPrefix/kernel/conf/account.go forkDstPrefix/kernel/conf/account.go
-index 5e3b51fb8f9d2944a2cacef66cdc3bc9bd365c5a..d4f4e00dea010730b557f7c122b624fb015b1021 100644
---- forkSrcPrefix/kernel/conf/account.go
-+++ forkDstPrefix/kernel/conf/account.go
-@@ -23,7 +23,7 @@ type Account struct {
- 
- func NewAccount() *Account {
- 	return &Account{
--		DisplayTitle: true,
--		DisplayVIP:   true,
-+		DisplayTitle: false,
-+		DisplayVIP:   false,
- 	}
- }
-diff --git forkSrcPrefix/kernel/conf/appearance.go forkDstPrefix/kernel/conf/appearance.go
-index ebd1002acf907e4afb3524fe5adcf672a850646b..1df2f4761587468cadf8f6d43573836790473f22 100644
---- forkSrcPrefix/kernel/conf/appearance.go
-+++ forkDstPrefix/kernel/conf/appearance.go
-@@ -50,8 +50,8 @@ func NewAppearance() *Appearance {
+diff --git a/kernel/conf/appearance.go b/kernel/conf/appearance.go
+index 6c79d4d1275ec85e41879fcf9616a848ba5dc676..0ff0a6410f2c2fb7bf3c9b34bbd391d653a02cbe 100644
+--- a/kernel/conf/appearance.go
++++ b/kernel/conf/appearance.go
+@@ -64,8 +64,8 @@ func NewAppearance() *Appearance {
  		Icon:                "litheness",
  		CodeBlockThemeLight: "github",
  		CodeBlockThemeDark:  "base16/dracula",
@@ -43,3 +13,18 @@ index ebd1002acf907e4afb3524fe5adcf672a850646b..1df2f4761587468cadf8f6d435738367
  		HideToolbar:         true,
  		HideStatusBar:       false,
  		StatusBar:           util.NewStatusBar(util.IsMobileContainer()),
+diff --git a/kernel/conf/sync.go b/kernel/conf/sync.go
+index 2fdeb79c656288be08fb5ec7a886098d994c8c91..3156dad4dbed9b86a1b72e9be065830fcaf727ed 100644
+--- a/kernel/conf/sync.go
++++ b/kernel/conf/sync.go
+@@ -39,8 +39,8 @@ func NewSync() *Sync {
+ 		Enabled:             false,
+ 		Perception:          false,
+ 		Mode:                1,
+-		GenerateConflictDoc: false,
+-		Provider:            ProviderSiYuan,
++		GenerateConflictDoc: true,
++		Provider:            ProviderS3,
+ 		Interval:            30,
+ 		LAN:                 &LANSync{MaxConcurrentReqs: 16},
+ 	}

@@ -1,25 +1,15 @@
 diff --git a/kernel/api/sync.go b/kernel/api/sync.go
-index 34f7081..cdaaac8 100644
+index 544f17b4ecb1b4bb56424fbcd761942e229649d2..534b7618f7cf703341e61362bd3a7998c36ec315 100644
 --- a/kernel/api/sync.go
 +++ b/kernel/api/sync.go
-@@ -457,40 +457,52 @@ func performSync(c *gin.Context) {
- 	ret := gulu.Ret.NewResult()
- 	defer c.JSON(http.StatusOK, ret)
+@@ -410,32 +410,42 @@ var performSync = contractHandler(apicontract.PerformSync, performSyncContract)
+ func performSyncContract(c *gin.Context, request apicontract.PerformSyncRequest) (ret apicontract.Response[apicontract.Null]) {
+ 	ret = apicontract.Success(apicontract.Null{})
  
 +	logging.LogInfof("[sync-diag] performSync request received")
 +
- 	arg, ok := util.JsonArg(c, ret)
- 	if !ok {
-+		logging.LogWarnf("[sync-diag] performSync skipped [reason=invalid-json]")
- 		return
- 	}
- 
  	// Android 端前后台切换时自动触发同步 https://github.com/siyuan-note/siyuan/issues/7122
- 	var mobileSwitch bool
- 	if !util.ParseJsonArgs(arg, ret, util.BindJsonArg("mobileSwitch", &mobileSwitch, false, false)) {
-+		logging.LogWarnf("[sync-diag] performSync skipped [reason=invalid-mobile-switch]")
- 		return
- 	}
+ 	mobileSwitch := request.MobileSwitch
  	if mobileSwitch {
  		if !util.IsBooted() {
 +			logging.LogWarnf("[sync-diag] performSync skipped [reason=kernel-not-booted, mobileSwitch=true]")
@@ -41,10 +31,10 @@ index 34f7081..cdaaac8 100644
  	}
  
  	// 云端同步模式支持 `完全手动同步` 模式 https://github.com/siyuan-note/siyuan/issues/7295
- 	var upload bool
- 	if !util.ParseJsonArgs(arg, ret, util.BindJsonArg("upload", &upload, true, false)) {
+ 	upload, err := request.UploadDirection()
+ 	if err != nil {
 +		logging.LogWarnf("[sync-diag] performSync skipped [reason=invalid-upload]")
- 		return
+ 		return apicontract.Failure[apicontract.Null](-1, err.Error())
  	}
 +	logging.LogInfof("[sync-diag] performSync dispatch [mode=%d, mobileSwitch=%t, upload=%t]", model.Conf.Sync.Mode, mobileSwitch, upload)
  	if upload {
@@ -53,14 +43,14 @@ index 34f7081..cdaaac8 100644
  		model.SyncDataDownload()
  	}
 +	logging.LogInfof("[sync-diag] performSync returned [upload=%t]", upload)
+ 	return
  }
  
- func performBootSync(c *gin.Context) {
 diff --git a/kernel/model/cloud_service.go b/kernel/model/cloud_service.go
-index 6d87745..277058b 100644
+index b236e607b7178298bf3ff78a075648f5463b2b2f..5762a50755739ba4912bed2a9c6015cc63fb3f2d 100644
 --- a/kernel/model/cloud_service.go
 +++ b/kernel/model/cloud_service.go
-@@ -239,8 +239,14 @@ func refreshSubscriptionExpirationRemind() {
+@@ -290,8 +290,14 @@ func refreshSubscriptionExpirationRemind() {
  
  	defer logging.Recover()
  
@@ -77,7 +67,7 @@ index 6d87745..277058b 100644
  		now := time.Now().UnixMilli()
  		if now >= expired { // 已经过期
  			if now-expired <= 1000*60*60*24*2 { // 2 天内提醒 https://github.com/siyuan-note/siyuan/issues/7816
-@@ -250,7 +256,7 @@ func refreshSubscriptionExpirationRemind() {
+@@ -301,7 +307,7 @@ func refreshSubscriptionExpirationRemind() {
  		}
  		remains := int((expired - now) / 1000 / 60 / 60 / 24)
  		expireDay := 15 // 付费订阅提前 15 天提醒
@@ -87,11 +77,11 @@ index 6d87745..277058b 100644
  		}
  
 diff --git a/kernel/model/sync.go b/kernel/model/sync.go
-index 2aefe12..1a2507b 100644
+index d249022e06ecdbad62e18babdae97a257c705681..f42da11cd4d4bfb598c6c502fae8516e2fa0d882 100644
 --- a/kernel/model/sync.go
 +++ b/kernel/model/sync.go
-@@ -47,34 +47,50 @@ import (
- func SyncDataDownload() {
+@@ -49,34 +49,50 @@ func SyncDataDownload() (err error) {
+ 	err = errors.New("sync download did not complete")
  	defer logging.Recover()
  
 +	logging.LogInfof("[sync-diag] manual sync entered [direction=download, provider=%d, endpointPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent())
@@ -106,7 +96,7 @@ index 2aefe12..1a2507b 100644
 +	logging.LogInfof("[sync-diag] provider preflight returned [direction=download, provider=%d, endpointPresent=%t, latestPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent(), "" != latestID)
  	if "" != latestID {
 +		logging.LogInfof("[sync-diag] manual sync request coordination started [direction=download]")
- 		_, _ = syncRemoteRequests.do(scope, latestID, func() error {
+ 		_, err = syncRemoteRequests.do(scope, latestID, func() error {
 +			logging.LogInfof("[sync-diag] sync lock waiting [direction=download]")
  			lockSync()
 +			logging.LogInfof("[sync-diag] sync lock acquired [direction=download]")
@@ -134,16 +124,16 @@ index 2aefe12..1a2507b 100644
  		return
  	}
  	defer unlock()
--	if err := syncDataDownloadLocked(); nil == err {
+-	if err = syncDataDownloadLocked(); nil == err {
 +	logging.LogInfof("[sync-diag] provider operation started [direction=download, provider=%d, endpointPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent())
-+	err := syncDataDownloadLocked()
++	err = syncDataDownloadLocked()
 +	logging.LogInfof("[sync-diag] provider operation returned [direction=download, provider=%d, endpointPresent=%t, success=%t]", Conf.Sync.Provider, syncProviderEndpointPresent(), nil == err)
 +	if nil == err {
  		completeCurrentSyncRemoteRequest(scope)
  	}
- }
-@@ -134,11 +150,15 @@ func completeCurrentSyncRemoteRequest(scope string) {
- func SyncDataUpload() {
+ 	return
+@@ -142,11 +158,15 @@ func SyncDataUpload() (err error) {
+ 	err = errors.New("sync upload did not complete")
  	defer logging.Recover()
  
 +	logging.LogInfof("[sync-diag] manual sync entered [direction=upload, provider=%d, endpointPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent())
@@ -158,31 +148,31 @@ index 2aefe12..1a2507b 100644
  	if !ok {
  		return
  	}
-@@ -148,7 +168,9 @@ func SyncDataUpload() {
+@@ -156,7 +176,9 @@ func SyncDataUpload() (err error) {
  	now := util.CurrentTimeMillis()
  	Conf.Sync.Synced = now
  
 +	logging.LogInfof("[sync-diag] provider operation started [direction=upload, provider=%d, endpointPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent())
- 	err := syncRepoUploadWithDNSRetry()
+ 	err = syncRepoUploadWithDNSRetry()
 +	logging.LogInfof("[sync-diag] provider operation returned [direction=upload, provider=%d, endpointPresent=%t, success=%t]", Conf.Sync.Provider, syncProviderEndpointPresent(), nil == err)
  	code := 1
  	if err != nil {
  		code = 2
-@@ -158,9 +180,10 @@ func SyncDataUpload() {
+@@ -166,9 +188,10 @@ func SyncDataUpload() (err error) {
  }
  
  var (
 -	syncSameCount    = atomic.Int32{}
 -	autoSyncErrCount = 0
 -	fixSyncInterval  = 5 * time.Minute
-+	syncSameCount       = atomic.Int32{}
-+	autoSyncErrCount    = 0
-+	syncModeGateLogged  = atomic.Bool{}
-+	fixSyncInterval     = 5 * time.Minute
++	syncSameCount      = atomic.Int32{}
++	autoSyncErrCount   = 0
++	syncModeGateLogged = atomic.Bool{}
++	fixSyncInterval    = 5 * time.Minute
  
  	syncPlanTimeLock = sync.Mutex{}
  	syncPlanTime     = time.Now().Add(fixSyncInterval)
-@@ -278,7 +301,13 @@ func lockSyncRequest(state *syncRequestState) (unlock func(), ok bool) {
+@@ -286,7 +309,13 @@ func lockSyncRequest(state *syncRequestState) (unlock func(), ok bool) {
  func syncData(exit, byHand bool) {
  	defer logging.Recover()
  
@@ -196,7 +186,7 @@ index 2aefe12..1a2507b 100644
  		return
  	}
  
-@@ -288,12 +317,24 @@ func syncData(exit, byHand bool) {
+@@ -296,12 +325,24 @@ func syncData(exit, byHand bool) {
  	} else if exit {
  		requests = &syncExitRequests
  	}
@@ -222,7 +212,7 @@ index 2aefe12..1a2507b 100644
  }
  
  func syncDataLocked(exit, byHand bool) error {
-@@ -341,15 +382,25 @@ func syncDataLocked(exit, byHand bool) error {
+@@ -349,15 +390,25 @@ func syncDataLocked(exit, byHand bool) error {
  
  func checkSync(boot, exit, byHand bool) bool {
  	if 2 == Conf.Sync.Mode && !boot && !exit && !byHand { // 手动模式下只有启动和退出进行同步
@@ -248,9 +238,9 @@ index 2aefe12..1a2507b 100644
  			util.PushMsg(Conf.Language(124), 5000)
  		}
  		return false
-@@ -357,12 +408,19 @@ func checkSync(boot, exit, byHand bool) bool {
+@@ -365,23 +416,36 @@ func checkSync(boot, exit, byHand bool) bool {
  
- 	if !cloud.IsValidCloudDirName(Conf.Sync.CloudName) {
+ 	if conf.ProviderS3 != Conf.Sync.Provider && !cloud.IsValidCloudDirName(Conf.Sync.CloudName) {
  		if byHand {
 +			logging.LogWarnf("[sync-diag] checkSync skipped [reason=invalid-cloud-name, cloudNamePresent=%t]", "" != strings.TrimSpace(Conf.Sync.CloudName))
  			util.PushMsg(Conf.Language(123), 5000)
@@ -269,7 +259,7 @@ index 2aefe12..1a2507b 100644
 +	}
  
  	switch Conf.Sync.Provider {
-@@ -374,5 +432,8 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	case conf.ProviderSiYuan:
  		if !IsSubscriber() {
 +			if byHand {
 +				logging.LogWarnf("[sync-diag] checkSync skipped [reason=subscription-gate, provider=%d]", Conf.Sync.Provider)
@@ -278,7 +268,7 @@ index 2aefe12..1a2507b 100644
  			Conf.Save()
  			return false
  		}
-@@ -380,5 +441,8 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	case conf.ProviderWebDAV, conf.ProviderS3, conf.ProviderLocal:
  		if !IsPaidUser() {
 +			if byHand {
 +				logging.LogWarnf("[sync-diag] checkSync skipped [reason=paid-user-gate, provider=%d, endpointPresent=%t]", Conf.Sync.Provider, syncProviderEndpointPresent())
@@ -286,8 +276,9 @@ index 2aefe12..1a2507b 100644
  			Conf.Sync.Enabled = false
  			Conf.Save()
  			return false
- 		}
-@@ -387,12 +451,29 @@ func checkSync(boot, exit, byHand bool) bool {
+@@ -389,14 +453,31 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	}
+ 
  	if 7 < autoSyncErrCount && !byHand {
 -		logging.LogErrorf("failed to auto-sync too many times, delay auto-sync 64 minutes")
 +		logging.LogErrorf("[sync-diag] checkSync skipped [reason=auto-error-limit, errorCount=%d]", autoSyncErrCount)
