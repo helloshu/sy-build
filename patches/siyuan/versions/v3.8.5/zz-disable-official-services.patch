@@ -14,10 +14,10 @@ index 415ca10..b1691f0 100644
  	retMsg := "unknown error"
  
 diff --git a/kernel/model/bazaar_rating.go b/kernel/model/bazaar_rating.go
-index 5c44240..4635538 100644
+index 7edb2b0..ca202ba 100644
 --- a/kernel/model/bazaar_rating.go
 +++ b/kernel/model/bazaar_rating.go
-@@ -249,6 +249,9 @@ func validateBazaarPackageRatingRequest0(ctx context.Context, pkgType, packageNa
+@@ -261,6 +261,9 @@ func validateBazaarPackageRatingRequest0(ctx context.Context, pkgType, packageNa
  }
  
  func getBazaarRatingUserToken() (string, error) {
@@ -208,7 +208,7 @@ index 5762a50..75e7757 100644
  	code, codeOK := result["code"].(float64)
  	msg, msgOK := result["msg"].(string)
 diff --git a/kernel/model/export.go b/kernel/model/export.go
-index 60ed55a..7ccb9c4 100644
+index 0e02865..6c568c7 100644
 --- a/kernel/model/export.go
 +++ b/kernel/model/export.go
 @@ -407,6 +407,10 @@ func ExportAv2CSV(avID, blockID string) (zipPath string, err error) {
@@ -223,10 +223,10 @@ index 60ed55a..7ccb9c4 100644
  		return
  	}
 diff --git a/kernel/model/repository.go b/kernel/model/repository.go
-index 353fca0..2bcfd13 100644
+index 9bde672..4b321ce 100644
 --- a/kernel/model/repository.go
 +++ b/kernel/model/repository.go
-@@ -1453,6 +1453,9 @@ func appendAgentRollbackEntries() {
+@@ -1471,6 +1471,9 @@ func appendAgentRollbackEntries() {
  func DownloadCloudSnapshot(tag, id string) (err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
@@ -236,7 +236,7 @@ index 353fca0..2bcfd13 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1499,6 +1502,9 @@ func DownloadCloudSnapshot(tag, id string) (err error) {
+@@ -1517,6 +1520,9 @@ func DownloadCloudSnapshot(tag, id string) (err error) {
  func UploadCloudSnapshot(tag, id string) (err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
@@ -246,7 +246,7 @@ index 353fca0..2bcfd13 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1545,6 +1551,9 @@ func UploadCloudSnapshot(tag, id string) (err error) {
+@@ -1572,6 +1578,9 @@ func UploadCloudSnapshot(tag, id string) (err error) {
  func RemoveCloudRepoTag(tag string) (err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
@@ -256,7 +256,7 @@ index 353fca0..2bcfd13 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1581,6 +1590,10 @@ func GetCloudRepoTagSnapshots() (ret []*dejavu.Log, err error) {
+@@ -1608,6 +1617,10 @@ func GetCloudRepoTagSnapshots() (ret []*dejavu.Log, err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
  	ret = []*dejavu.Log{}
@@ -267,7 +267,7 @@ index 353fca0..2bcfd13 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -1621,6 +1634,10 @@ func GetCloudRepoSnapshots(page int) (ret []*dejavu.Log, pageCount, totalCount i
+@@ -1648,6 +1661,10 @@ func GetCloudRepoSnapshots(page int) (ret []*dejavu.Log, pageCount, totalCount i
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
  	ret = []*dejavu.Log{}
@@ -278,7 +278,7 @@ index 353fca0..2bcfd13 100644
  	if 1 > len(Conf.Repo.Key) {
  		err = errors.New(Conf.Language(26))
  		return
-@@ -3308,6 +3325,9 @@ func GetCloudSpace() (s *Sync, b *Backup, hSize, hAssetSize, hTotalSize, hExchan
+@@ -3400,6 +3417,9 @@ func GetCloudSpace() (s *Sync, b *Backup, hSize, hAssetSize, hTotalSize, hExchan
  func getCloudSpace() (stat *cloud.Stat, err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
@@ -287,12 +287,12 @@ index 353fca0..2bcfd13 100644
 +	}
  	handleCloudError := cloudRepoErrorHandler()
  	defer func() { handleCloudError(err) }()
- 	repo, err := newRepositoryWithAssetSourceLocked()
+ 	repo, err := newCloudRepositoryWithAssetSourceLocked()
 diff --git a/kernel/model/sync.go b/kernel/model/sync.go
-index 190ce75..cfad2b5 100644
+index 522070c..0cb6ecd 100644
 --- a/kernel/model/sync.go
 +++ b/kernel/model/sync.go
-@@ -429,6 +429,12 @@ func checkSync(boot, exit, byHand bool) bool {
+@@ -412,6 +412,12 @@ func checkSync(boot, exit, byHand bool) bool {
  
  	switch Conf.Sync.Provider {
  	case conf.ProviderSiYuan:
@@ -305,17 +305,17 @@ index 190ce75..cfad2b5 100644
  		if !IsSubscriber() {
  			if byHand {
  				logging.LogWarnf("[sync-diag] checkSync skipped [reason=subscription-gate, provider=%d]", Conf.Sync.Provider)
-@@ -652,6 +658,9 @@ func SetSyncMode(mode int) {
+@@ -656,6 +662,9 @@ func SetSyncMode(mode int) {
  }
  
- func SetSyncProvider(provider int) (err error) {
+ func SetSyncProvider(provider int, completeAssets bool) (err error) {
 +	if officialCloudServicesDisabled && conf.ProviderSiYuan == provider {
 +		return ErrOfficialCloudServicesDisabled
 +	}
  	release := lockAssetSourceChange()
  	defer release()
  	if provider != Conf.Sync.Provider {
-@@ -779,6 +788,9 @@ var (
+@@ -819,6 +828,9 @@ var (
  func CreateCloudSyncDir(name string) (err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
@@ -325,7 +325,7 @@ index 190ce75..cfad2b5 100644
  	switch Conf.Sync.Provider {
  	case conf.ProviderSiYuan, conf.ProviderLocal:
  		break
-@@ -811,6 +823,9 @@ func CreateCloudSyncDir(name string) (err error) {
+@@ -851,6 +863,9 @@ func CreateCloudSyncDir(name string) (err error) {
  func RemoveCloudSyncDir(name string) (err error) {
  	release := lockAssetSourceChange()
  	defer release()
@@ -335,7 +335,7 @@ index 190ce75..cfad2b5 100644
  	if name == Conf.Sync.CloudName {
  		if err = requireCompleteAssetDownloads(); err != nil {
  			return
-@@ -854,6 +869,10 @@ func ListCloudSyncDir() (syncDirs []*Sync, hSize string, err error) {
+@@ -894,6 +909,10 @@ func ListCloudSyncDir() (syncDirs []*Sync, hSize string, err error) {
  	assetDownloadSourceMu.RLock()
  	defer assetDownloadSourceMu.RUnlock()
  	syncDirs = []*Sync{}
@@ -346,7 +346,7 @@ index 190ce75..cfad2b5 100644
  	var dirs []*cloud.Repo
  	var size int64
  
-@@ -1124,6 +1143,9 @@ func closeSyncWebSocket() {
+@@ -1184,6 +1203,9 @@ func closeSyncWebSocket() {
  func connectSyncWebSocket() {
  	defer logging.Recover()
  

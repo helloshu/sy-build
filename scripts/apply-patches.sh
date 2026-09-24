@@ -3,6 +3,7 @@
 #
 # 用法: apply-patches.sh <siyuan 源码目录> [补丁目录]
 #   补丁目录默认为本脚本 ../patches/siyuan，目录内所有 *.patch 按文件名顺序应用。
+#   若源码 HEAD 正好位于标签上，优先使用 versions/<标签>/<同名补丁> 中的版本覆盖补丁。
 #
 # 每个补丁的应用策略:
 #   所有 git apply 调用都使用 --recount，根据补丁正文重算 hunk 行数，避免过时的行数头静默遗漏尾部变更。
@@ -36,10 +37,18 @@ if [ ${#patches[@]} -eq 0 ]; then
   exit 1
 fi
 
+upstream_tag="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
+if [ -n "$upstream_tag" ] && [ -d "$PATCH_DIR/versions/$upstream_tag" ]; then
+  echo "[patches] 检测到上游标签 $upstream_tag，使用对应的版本覆盖补丁"
+fi
+
 fail=0
 applied=0
 for p in "${patches[@]}"; do
   name="$(basename "$p")"
+  if [ -n "$upstream_tag" ] && [ -f "$PATCH_DIR/versions/$upstream_tag/$name" ]; then
+    p="$PATCH_DIR/versions/$upstream_tag/$name"
+  fi
   if git apply --recount --ignore-whitespace "$p" 2>/dev/null; then
     echo "[patches] $name 已应用 (严格匹配)"
     applied=$((applied + 1))
