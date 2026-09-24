@@ -39,7 +39,7 @@ fi
 
 upstream_tag="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
 if [ -n "$upstream_tag" ] && [ -d "$PATCH_DIR/versions/$upstream_tag" ]; then
-  echo "[patches] 检测到上游标签 $upstream_tag，使用对应的版本覆盖补丁"
+  echo "[patches] 检测到上游标签 ${upstream_tag}，使用对应的版本覆盖补丁"
 fi
 
 fail=0
