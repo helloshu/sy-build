@@ -105,4 +105,5 @@ for p in "${patches[@]}"; do
   fi
 done
 
-echo "[patches] 完成: 新应用 $applied，已应用 $skipped，共 ${#patches[@]} 个补丁"
+# macOS Bash 3.2 可能把紧邻变量的非 ASCII 字节计入变量名，显式限定变量边界。
+echo "[patches] 完成: 新应用 ${applied}，已应用 ${skipped}，共 ${#patches[@]} 个补丁"

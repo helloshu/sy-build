@@ -2,6 +2,7 @@
 import difflib
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -35,6 +36,16 @@ class PatchSelectionTest(unittest.TestCase):
             cwd=self.root, text=True, capture_output=True,
         )
 
+    def test_non_ascii_text_cannot_extend_shell_variable_names(self):
+        # macOS Bash 3.2 can consume non-ASCII bytes after an unbraced variable.
+        # Linux Bash 3.2 does not reliably reproduce that platform-specific bug.
+        for script in SCRIPT.parent.glob("*.sh"):
+            with self.subTest(script=script.name):
+                self.assertIsNone(re.search(
+                    r"\$[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7f]",
+                    script.read_text(encoding="utf-8"),
+                ))
+
     def test_unknown_tag_falls_back_and_repeat_is_unchanged(self):
         original = "start\nnew upstream\nend\n"
         expected = "start\npatched\nend\n"
@@ -46,10 +57,11 @@ class PatchSelectionTest(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertIn("versions/v3.8.5/fix.patch", first.stdout)
         self.assertEqual(target.read_text(), expected)
+        self.assertIn("新应用 1，已应用 0，共 1 个补丁", first.stdout)
         second = self.run_patches()
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(target.read_text(), expected)
-        self.assertIn("新应用 0，已应用 1", second.stdout)
+        self.assertIn("新应用 0，已应用 1，共 1 个补丁", second.stdout)
 
     def tag_source(self, tag):
         subprocess.run(["git", "add", "."], cwd=self.source, check=True)

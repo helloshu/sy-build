@@ -73,11 +73,27 @@ jobs:
             echo "should_skip=false" >> $GITHUB_OUTPUT
           fi
 
+  test-patch-scripts:
+    needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test patch scripts on the native shell
+        env:
+          TEST_BASH: /bin/bash
+        run: python3 -m unittest discover -s tests -v
+
   check-patches:
     timeout-minutes: 20
     outputs:
       android_sha: ${{ steps.android_ref.outputs.sha }}
-    needs: check-version
+    needs: [check-version, test-patch-scripts]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     steps:
@@ -85,8 +101,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: sy-build
-      - name: Test patch selection
-        run: python3 -m unittest discover -s sy-build/tests -v
       - name: Checkout upstream for patch compatibility check
         uses: actions/checkout@v6
         with:
