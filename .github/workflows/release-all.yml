@@ -73,8 +73,64 @@ jobs:
             echo "should_skip=false" >> $GITHUB_OUTPUT
           fi
 
-  build-desktop:
+  check-patches:
+    timeout-minutes: 20
+    outputs:
+      android_sha: ${{ steps.android_ref.outputs.sha }}
     needs: check-version
+    if: needs.check-version.outputs.should_skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sy-build repository
+        uses: actions/checkout@v6
+        with:
+          path: sy-build
+      - name: Test patch selection
+        run: python3 -m unittest discover -s sy-build/tests -v
+      - name: Checkout upstream for patch compatibility check
+        uses: actions/checkout@v6
+        with:
+          repository: siyuan-note/siyuan
+          ref: ${{ needs.check-version.outputs.version }}
+          path: siyuan
+      - name: Resolve compatible Android source
+        id: android_ref
+        shell: bash
+        env:
+          SIYUAN_VERSION: ${{ needs.check-version.outputs.version }}
+        run: |
+          android_sha=$(python3 sy-build/scripts/resolve-android-ref.py "$SIYUAN_VERSION")
+          echo "sha=$android_sha" >> "$GITHUB_OUTPUT"
+      - name: Verify patch application and idempotence
+        shell: bash
+        run: |
+          bash sy-build/scripts/apply-patches.sh siyuan
+          git -C siyuan add --intent-to-add .
+          git -C siyuan diff --binary > "$RUNNER_TEMP/patches-first.diff"
+          bash sy-build/scripts/apply-patches.sh siyuan
+          git -C siyuan add --intent-to-add .
+          git -C siyuan diff --binary > "$RUNNER_TEMP/patches-second.diff"
+          cmp "$RUNNER_TEMP/patches-first.diff" "$RUNNER_TEMP/patches-second.diff"
+          git -C siyuan diff --check
+      - name: Set up Go for patched source validation
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: siyuan/kernel/go.mod
+          cache-dependency-path: siyuan/kernel/go.sum
+      - name: Check patched Go syntax
+        working-directory: siyuan
+        shell: bash
+        run: |
+          {
+            git diff --name-only --diff-filter=ACM -z -- '*.go'
+            git ls-files --others --exclude-standard -z -- '*.go'
+          } | xargs -0 -r gofmt -e > /dev/null
+      - name: Compile patched Go packages
+        working-directory: siyuan/kernel
+        run: go test -run '^$' -tags 'fts5 sqlcipher' ./api ./model ./mobile ./conf ./util
+
+  build-desktop:
+    needs: [check-version, check-patches]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ${{ matrix.config.os }}
     timeout-minutes: 30
@@ -219,7 +275,7 @@ jobs:
           path: ${{ github.workspace }}/siyuan/app/build/siyuan-*
 
   build-android:
-    needs: check-version
+    needs: [check-version, check-patches]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 45
@@ -233,6 +289,7 @@ jobs:
       - name: clone origin and apply patches
         env:
           SIYUAN_VERSION: ${{ needs.check-version.outputs.version }}
+          SIYUAN_ANDROID_REF: ${{ needs.check-patches.outputs.android_sha }}
         run: |
           set -euo pipefail
           mkdir -p ${{ github.workspace }}/go
@@ -246,8 +303,11 @@ jobs:
 
           cd ..
 
-          git clone --branch "$SIYUAN_VERSION" --depth=1 https://github.com/siyuan-note/siyuan-android.git
+          git init siyuan-android
           cd siyuan-android
+          git remote add origin https://github.com/siyuan-note/siyuan-android.git
+          git fetch --depth=1 origin "$SIYUAN_ANDROID_REF"
+          git checkout --detach FETCH_HEAD
           SIYUAN_ANDROID_SHA="$(git rev-parse HEAD)"
           SY_BUILD_SHA="$(git -C "${{ github.workspace }}/sy-build" rev-parse HEAD)"
           if [ "$SY_BUILD_SHA" != "$GITHUB_SHA" ]; then
@@ -427,31 +487,38 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan/app
 
       - name: Install gomobile
-        working-directory: ${{ github.workspace }}/go
+        working-directory: ${{ github.workspace }}/siyuan/kernel
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          mobile_version=$(go list -m -f '{{.Version}}' golang.org/x/mobile)
+          go install "golang.org/x/mobile/cmd/gomobile@$mobile_version" "golang.org/x/mobile/cmd/gobind@$mobile_version"
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile init
+          # bind 只需工作目录；gomobile init 会强制安装 gobind@latest，导致工具版本漂移。
+          mkdir -p "$(go env GOPATH)/pkg/gomobile"
 
       - name: Set up java
         uses: actions/setup-java@v5
         with:
           distribution: "temurin"
-          java-version: "17"
+          java-version: "21"
           cache: "gradle"
+
+      - name: Set up Android NDK
+        shell: bash
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$sdkmanager" ]; then
+            sdkmanager=$(find "$ANDROID_HOME/cmdline-tools" -type f -path '*/bin/sdkmanager' | sort -V | tail -n 1)
+          fi
+          test -x "$sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$sdkmanager" "ndk;28.2.13676358"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
       - name: Building Android Kernel
         run: |
-          if [ -d "$ANDROID_HOME/ndk" ]; then
-            NDK_PATH=$(ls -d $ANDROID_HOME/ndk/25* 2>/dev/null | tail -n 1)
-            if [ -z "$NDK_PATH" ]; then
-              NDK_PATH=$(ls -d $ANDROID_HOME/ndk/* | tail -n 1)
-            fi
-            export ANDROID_NDK_HOME="$NDK_PATH"
-            echo "Using NDK: $ANDROID_NDK_HOME"
-          fi
-          gomobile bind --tags "fts5 sqlcipher" -androidapi 21 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
+          gomobile bind --tags "fts5 sqlcipher" -androidapi 26 -target='android/arm64' -ldflags '-s -w' -v -o "../../../siyuan-android/app/libs/kernel.aar" ./
           KERNEL_AAR_PATH="${{ github.workspace }}/siyuan-android/app/libs/kernel.aar"
           test -s "$KERNEL_AAR_PATH"
           KERNEL_AAR_SHA256="$(sha256sum "$KERNEL_AAR_PATH" | awk '{print $1}')"
@@ -715,7 +782,7 @@ jobs:
           if-no-files-found: error
 
   build-ios:
-    needs: check-version
+    needs: [check-version, check-patches]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: macos-latest
     timeout-minutes: 45
@@ -786,19 +853,27 @@ jobs:
       - name: Fix iOS AppIcon and Project Settings
         working-directory: ${{ github.workspace }}/siyuan-ios
         shell: bash
+        env:
+          SIYUAN_VERSION: ${{ needs.check-version.outputs.version }}
         run: |
           if [ -d "siyuan-ios/Assets.xcassets/AppIcon.appiconset" ]; then
             cp -r siyuan-ios/Assets.xcassets/AppIcon.appiconset siyuan-ios/Assets.xcassets/logo.appiconset || true
           elif [ -d "Assets.xcassets/AppIcon.appiconset" ]; then
             cp -r Assets.xcassets/AppIcon.appiconset Assets.xcassets/logo.appiconset || true
           fi
-          sed -i '' 's/MARKETING_VERSION =\(.*\)/MARKETING_VERSION = ${{ needs.check-version.outputs.version }};/g' siyuan-ios.xcodeproj/project.pbxproj || true
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER =\(.*\)/PRODUCT_BUNDLE_IDENTIFIER = com.ld246.siyuan.debug;/g' siyuan-ios.xcodeproj/project.pbxproj || true
           # 禁用代码签名：Automatic→Manual，清空签名身份，适配未签名构建
           python3 -c "
+          import os
           import re
           with open('siyuan-ios.xcodeproj/project.pbxproj', 'r', encoding='utf-8') as f:
               c = f.read()
+          version = os.environ['SIYUAN_VERSION'].removeprefix('v').split('-', 1)[0]
+          if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+              raise SystemExit('Invalid iOS marketing version: ' + version)
+          c, count = re.subn(r'MARKETING_VERSION = [^;]+;', 'MARKETING_VERSION = ' + version + ';', c)
+          if count == 0:
+              raise SystemExit('Missing MARKETING_VERSION in iOS project')
           c = re.sub(r'CODE_SIGN_STYLE = \w+', 'CODE_SIGN_STYLE = Manual', c)
           c = re.sub(r'CODE_SIGN_IDENTITY = \"[^\"]*\"', 'CODE_SIGN_IDENTITY = \"\"', c)
           with open('siyuan-ios.xcodeproj/project.pbxproj', 'w', encoding='utf-8') as f:
@@ -832,11 +907,14 @@ jobs:
           pnpm run build
 
       - name: Install gomobile
+        working-directory: ${{ github.workspace }}/siyuan/kernel
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          mobile_version=$(go list -m -f '{{.Version}}' golang.org/x/mobile)
+          go install "golang.org/x/mobile/cmd/gomobile@$mobile_version" "golang.org/x/mobile/cmd/gobind@$mobile_version"
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
           export PATH=$PATH:$(go env GOPATH)/bin
-          gomobile init
+          # bind 只需工作目录；gomobile init 会强制安装 gobind@latest，导致工具版本漂移。
+          mkdir -p "$(go env GOPATH)/pkg/gomobile"
 
       - name: Building ios Kernel
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
@@ -879,7 +957,7 @@ jobs:
           path: ${{ github.workspace }}/siyuan-ios-out/siyuan-*-ios.ipa
 
   build-docker:
-    needs: check-version
+    needs: [check-version, check-patches]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
