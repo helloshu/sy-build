@@ -809,7 +809,7 @@ jobs:
     needs: [check-version, check-patches]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Checkout sy-build repository
         uses: actions/checkout@v6
@@ -944,7 +944,8 @@ jobs:
         working-directory: ${{ github.workspace }}/siyuan/kernel/mobile
         run: |
           mkdir -p ../ios
-          gomobile bind --tags "fts5 sqlcipher" -ldflags '-s -w' -v -target=ios -o "../ios/iosk.xcframework" ./
+          # IPA 仅用于真机；ios 默认还会编译两个模拟器架构，显式限定为真机 arm64。
+          gomobile bind --tags "fts5 sqlcipher" -ldflags '-s -w' -v -target=ios/arm64 -o "../ios/iosk.xcframework" ./
           cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/ || true
           cp -r ../ios/iosk.xcframework ${{ github.workspace }}/siyuan-ios/siyuan-ios/ || true
         env:
