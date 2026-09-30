@@ -79,15 +79,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
       - name: Test patch scripts on the native shell
+        shell: bash
         env:
-          TEST_BASH: /bin/bash
-        run: python3 -m unittest discover -s tests -v
+          PYTHONUTF8: "1"
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            export TEST_BASH="$(cygpath -w "$(command -v bash)")"
+          else
+            export TEST_BASH=/bin/bash
+          fi
+          python -m unittest discover -s tests -v
 
   check-patches:
     timeout-minutes: 20

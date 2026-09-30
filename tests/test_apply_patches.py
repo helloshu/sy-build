@@ -27,13 +27,13 @@ class PatchSelectionTest(unittest.TestCase):
         path.write_text("".join(difflib.unified_diff(
             before.splitlines(True), after.splitlines(True),
             fromfile="a/" + filename, tofile="b/" + filename,
-        )))
+        )), encoding="utf-8", newline="")
 
     def run_patches(self):
         # The patch directory must resolve relative to the caller, not the source.
         return subprocess.run(
-            [os.environ.get("TEST_BASH", "bash"), str(SCRIPT), str(self.source), "patches"],
-            cwd=self.root, text=True, capture_output=True,
+            [os.environ.get("TEST_BASH", "bash"), SCRIPT.as_posix(), self.source.as_posix(), "patches"],
+            cwd=self.root, text=True, encoding="utf-8", capture_output=True,
         )
 
     def test_non_ascii_text_cannot_extend_shell_variable_names(self):
