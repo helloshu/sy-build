@@ -36,3 +36,11 @@ bash scripts/apply-patches.sh /path/to/siyuan
 同步诊断与官方服务补丁使用独立的小范围上下文，避免后者的插入使前者反向检查失败。默认补丁和 `v3.8.5` 覆盖保持原样，旧版继续按原有候选匹配。
 
 2026-10-16 本地验证：15 项脚本回归测试通过；上游 `v3.8.7`（`7a7430d8a3cf362e23de004a454ddabe651dc778`）的 7 份补丁首次全部应用、再次全部跳过且差异不变；无精确标签时也能选中兼容候选。补丁后 `git diff --check`、Go 语法和格式检查通过，并在 Windows/amd64、Go 1.26.5、CGO 开启时执行 `go test -run '^$' -tags 'fts5 sqlcipher' ./api ./model ./mobile ./conf ./util`，五个包均通过编译检查；未执行各平台完整打包。
+
+## Docker 前端共享数据
+
+`v3.8.7` 的 `app/src/protyle/render/av/lunarCalendar.ts` 从 `kernel/av/lunar_calendar_data.json` 导入农历数据。上游 Dockerfile 的 `node-build` 阶段只复制了 `app/`，即使 `go-build` 阶段已有 `kernel/`，前端编译仍会报模块不存在，因为两个阶段的文件系统相互独立。
+
+`docker-build-assets.patch` 在前端构建阶段将 `kernel/av/` 复制到 `/kernel/av/`，保留该导入路径对应的目录结构。复制整个目录也兼容尚未引入农历 JSON 的旧版本。该补丁通过现有应用脚本自动应用，不需要修改各平台的构建命令。
+
+验证：15 项脚本测试通过；`v3.8.7` 全部 8 份补丁应用成功，重复执行无新增差异，补丁后 `git diff --check` 通过；新补丁也在 `v3.8.5`、`v3.8.6` 的实际 Dockerfile 上通过应用和重复执行检查。按 `node-build` 的目录布局复现 JSON 模块缺失后，新增 COPY 可让相同的相对导入正确解析 1901–2100 年的数据。本机未安装 Docker，未执行完整镜像构建。

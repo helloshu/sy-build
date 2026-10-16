@@ -1,0 +1,8 @@
+diff --git a/Dockerfile b/Dockerfile
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -15,2 +15,4 @@
+ 
++# Frontend calendar data is shared with the kernel.
++COPY kernel/av/ /kernel/av/
+ ADD app/ .
