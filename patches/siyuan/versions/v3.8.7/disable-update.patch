@@ -1,0 +1,42 @@
+diff --git a/kernel/api/system.go b/kernel/api/system.go
+--- a/kernel/api/system.go
++++ b/kernel/api/system.go
+@@ -426,5 +426,2 @@
+ 	ret = apicontract.Success(apicontract.Null{})
+-
+-	showMsg := request.ShowMsg
+-	model.CheckUpdate(showMsg)
+ 	return
+diff --git a/kernel/conf/system.go b/kernel/conf/system.go
+--- a/kernel/conf/system.go
++++ b/kernel/conf/system.go
+@@ -75,3 +75,3 @@
+ 		NetworkProxy:       &NetworkProxy{},
+-		DownloadInstallPkg: true,
++		DownloadInstallPkg: false,
+ 		UpdateChannel:      UpdateChannelStable,
+diff --git a/kernel/model/mount.go b/kernel/model/mount.go
+--- a/kernel/model/mount.go
++++ b/kernel/model/mount.go
+@@ -569,4 +569,4 @@
+ 			// 每次打开帮助文档时自动检查版本更新并提醒 https://github.com/siyuan-note/siyuan/issues/5057
+-			time.Sleep(time.Second * 10)
+-			CheckUpdate(true)
++			// time.Sleep(time.Second * 10)
++			// CheckUpdate(true)
+ 		}()
+diff --git a/kernel/model/updater.go b/kernel/model/updater.go
+--- a/kernel/model/updater.go
++++ b/kernel/model/updater.go
+@@ -33,2 +33,3 @@
+ 	"github.com/siyuan-note/logging"
++	"github.com/siyuan-note/siyuan/kernel/conf"
+ 	"github.com/siyuan-note/siyuan/kernel/util"
+@@ -289,2 +290,7 @@
+ 	confSystemSnapshot := Conf.LoadSystem()
++	if confSystemSnapshot.DownloadInstallPkg {
++		confSystemSnapshot = UpdateSystemConf(func(system *conf.System) {
++			system.DownloadInstallPkg = false
++		})
++	}
+ 

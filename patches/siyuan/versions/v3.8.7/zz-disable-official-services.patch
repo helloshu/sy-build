@@ -1,0 +1,244 @@
+diff --git a/kernel/mobile/kernel.go b/kernel/mobile/kernel.go
+--- a/kernel/mobile/kernel.go
++++ b/kernel/mobile/kernel.go
+@@ -131,2 +131,6 @@
+ func VerifyAppStoreTransaction(accountToken, transactionID string) (retCode int) {
++	if util.OfficialCloudServicesDisabled {
++		return -2
++	}
++
+ 	retCode = -2
+diff --git a/kernel/model/bazaar_rating.go b/kernel/model/bazaar_rating.go
+--- a/kernel/model/bazaar_rating.go
++++ b/kernel/model/bazaar_rating.go
+@@ -263,2 +263,5 @@
+ func getBazaarRatingUserToken() (string, error) {
++	if officialCloudServicesDisabled {
++		return "", ErrOfficialCloudServicesDisabled
++	}
+ 	user := Conf.GetUser()
+diff --git a/kernel/model/cloud_service.go b/kernel/model/cloud_service.go
+--- a/kernel/model/cloud_service.go
++++ b/kernel/model/cloud_service.go
+@@ -39,3 +39,8 @@
+ 
+-var ErrFailedToConnectCloudServer = errors.New("failed to connect cloud server")
++var (
++	ErrFailedToConnectCloudServer    = errors.New("failed to connect cloud server")
++	ErrOfficialCloudServicesDisabled = errors.New("official cloud and account services are disabled")
++)
++
++const officialCloudServicesDisabled = util.OfficialCloudServicesDisabled
+ 
+@@ -48,2 +53,7 @@
+ func CloudChatGPT(msg string, contextMsgs []string) (ret string, stop bool, err error) {
++	if officialCloudServicesDisabled {
++		stop = true
++		err = ErrOfficialCloudServicesDisabled
++		return
++	}
+ 	user := Conf.GetUser()
+@@ -117,2 +127,5 @@
+ func StartFreeTrial() (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	user := Conf.GetUser()
+@@ -150,2 +163,5 @@
+ func DeactivateUser() (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	release := lockAssetSourceChange()
+@@ -191,2 +207,5 @@
+ func SetCloudBlockReminder(id, data string, timed int64) (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	user := Conf.GetUser()
+@@ -230,2 +249,5 @@
+ func LoadUploadToken() (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	now := time.Now().Unix()
+@@ -277,4 +299,2 @@
+ func RefreshCheckJob2H() {
+-	go refreshSubscriptionExpirationRemind()
+-	go refreshUser()
+ 	go refreshAnnouncement()
+@@ -408,2 +428,5 @@
+ func RefreshUser(token string) (ret *conf.User, err error) {
++	if officialCloudServicesDisabled {
++		return Conf.GetUser(), nil
++	}
+ 	release := lockAssetSourceChange()
+@@ -560,2 +583,5 @@
+ func RemoveCloudShorthands(ids []string) (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	user := Conf.GetUser()
+@@ -601,2 +627,6 @@
+ func GetCloudShorthand(id string) (ret map[string]any, err error) {
++	if officialCloudServicesDisabled {
++		err = ErrOfficialCloudServicesDisabled
++		return
++	}
+ 	user := Conf.GetUser()
+@@ -652,2 +682,6 @@
+ func GetCloudShorthands(page int) (result map[string]any, err error) {
++	if officialCloudServicesDisabled {
++		err = ErrOfficialCloudServicesDisabled
++		return
++	}
+ 	user := Conf.GetUser()
+@@ -719,2 +753,5 @@
+ func getUser(token string) (*conf.User, error) {
++	if officialCloudServicesDisabled {
++		return nil, ErrOfficialCloudServicesDisabled
++	}
+ 	result := map[string]any{}
+@@ -757,2 +794,5 @@
+ func UseActivationcode(code string) (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	code = util.RemoveInvalid(code)
+@@ -793,2 +833,5 @@
+ func CheckActivationcode(code string) (retCode int, msg string) {
++	if officialCloudServicesDisabled {
++		return 1, ErrOfficialCloudServicesDisabled.Error()
++	}
+ 	code = util.RemoveInvalid(code)
+@@ -835,2 +878,5 @@
+ func Login(userName, password, captcha string, cloudRegion int) (ret *gulu.Result) {
++	if officialCloudServicesDisabled {
++		return officialCloudDisabledResult()
++	}
+ 	release := lockAssetSourceChange()
+@@ -893,2 +939,5 @@
+ func Login2fa(token, code string) (ret *gulu.Result) {
++	if officialCloudServicesDisabled {
++		return officialCloudDisabledResult()
++	}
+ 	result := map[string]any{}
+@@ -922,2 +971,9 @@
+ 	ret.Msg = Conf.Language(18)
++	return ret
++}
++
++func officialCloudDisabledResult() *gulu.Result {
++	ret := gulu.Ret.NewResult()
++	ret.Code = -1
++	ret.Msg = ErrOfficialCloudServicesDisabled.Error()
+ 	return ret
+diff --git a/kernel/model/export.go b/kernel/model/export.go
+--- a/kernel/model/export.go
++++ b/kernel/model/export.go
+@@ -410,2 +410,6 @@
+ func Export2Liandi(id string) (err error) {
++	if officialCloudServicesDisabled {
++		return ErrOfficialCloudServicesDisabled
++	}
++
+ 	if err = prepareExportBlockAssets(id, false); err != nil {
+diff --git a/kernel/model/repository.go b/kernel/model/repository.go
+--- a/kernel/model/repository.go
++++ b/kernel/model/repository.go
+@@ -1561,2 +1561,5 @@
+ 	defer assetDownloadSourceMu.RUnlock()
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	if 1 > len(Conf.Repo.Load().Key) {
+@@ -1609,2 +1612,5 @@
+ 	defer assetDownloadSourceMu.RUnlock()
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	if 1 > len(Conf.Repo.Load().Key) {
+@@ -1664,2 +1670,5 @@
+ 	defer assetDownloadSourceMu.RUnlock()
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	if 1 > len(Conf.Repo.Load().Key) {
+@@ -1700,2 +1709,6 @@
+ 	ret = []*dejavu.Log{}
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		err = ErrOfficialCloudServicesDisabled
++		return
++	}
+ 	if 1 > len(Conf.Repo.Load().Key) {
+@@ -1744,2 +1757,6 @@
+ 	ret = []*dejavu.Log{}
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		err = ErrOfficialCloudServicesDisabled
++		return
++	}
+ 	if 1 > len(Conf.Repo.Load().Key) {
+@@ -3490,2 +3507,5 @@
+ 	defer assetDownloadSourceMu.RUnlock()
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		return nil, ErrOfficialCloudServicesDisabled
++	}
+ 	handleCloudError := cloudRepoErrorHandler()
+diff --git a/kernel/model/sync.go b/kernel/model/sync.go
+--- a/kernel/model/sync.go
++++ b/kernel/model/sync.go
+@@ -460,2 +460,8 @@
+ 	case conf.ProviderSiYuan:
++		if officialCloudServicesDisabled {
++			if byHand {
++				logging.LogWarnf("[sync-diag] checkSync skipped [reason=official-cloud-disabled, provider=%d]", Conf.Sync.Load().Provider)
++			}
++			return false
++		}
+ 		if !IsSubscriber() {
+@@ -698,2 +704,5 @@
+ func SetSyncProvider(provider int, completeAssets bool) (err error) {
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == provider {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	release := lockAssetSourceChange()
+@@ -861,2 +870,5 @@
+ 	defer assetDownloadSourceMu.RUnlock()
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	switch Conf.Sync.Load().Provider {
+@@ -893,2 +905,5 @@
+ 	defer release()
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		return ErrOfficialCloudServicesDisabled
++	}
+ 	if name == Conf.Sync.Load().CloudName {
+@@ -937,2 +952,6 @@
+ 	syncDirs = []*Sync{}
++	if officialCloudServicesDisabled && conf.ProviderSiYuan == Conf.Sync.Load().Provider {
++		err = ErrOfficialCloudServicesDisabled
++		return
++	}
+ 	var dirs []*cloud.Repo
+@@ -1228,2 +1247,5 @@
+ func connectSyncWebSocket() {
++	if officialCloudServicesDisabled {
++		return
++	}
+ 	confSyncReadSnapshot := Conf.LoadSync()
+diff --git a/kernel/util/rhy.go b/kernel/util/rhy.go
+--- a/kernel/util/rhy.go
++++ b/kernel/util/rhy.go
+@@ -29,2 +29,4 @@
+ 
++const OfficialCloudServicesDisabled = true
++
+ var (
+@@ -53,2 +55,6 @@
+ func GetRhyResult(ctx context.Context, force bool) (map[string]any, error) {
++	if OfficialCloudServicesDisabled {
++		return map[string]any{}, nil
++	}
++
+ 	cacheDuration := RhyCacheDuration

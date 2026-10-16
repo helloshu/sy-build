@@ -24,3 +24,15 @@ bash scripts/apply-patches.sh /path/to/siyuan
 ```
 
 第二次应全部跳过，不产生新增差异。脚本保持兼容 macOS 自带 Bash 的数组语法，不使用关联数组、`mapfile` 或零上下文强制应用。
+
+## v3.8.7 配置快照适配
+
+`v3.8.7` 将 `AppConf.System`、`Sync`、`Repo` 等配置段改为原子指针，并重构了手动下载同步流程。`versions/v3.8.7/` 提供三份同名覆盖补丁：
+
+- `disable-update.patch`：适配精简后的系统默认配置；使用 `LoadSystem()` 和会持久化的 `UpdateSystemConf()` 关闭安装包下载，避免直接修改已发布的配置快照。
+- `sync-diagnostic.patch`：适配新的手动下载入口和同步配置快照，保留同步诊断、第三方同步无需官方账号的逻辑，以及订阅提醒的空用户保护。
+- `zz-disable-official-services.patch`：适配 `SetSyncProvider(provider, completeAssets)`、同步和仓库配置读取、云服务声明及版本信息缓存结构，保留官方服务禁用逻辑。
+
+同步诊断与官方服务补丁使用独立的小范围上下文，避免后者的插入使前者反向检查失败。默认补丁和 `v3.8.5` 覆盖保持原样，旧版继续按原有候选匹配。
+
+2026-10-16 本地验证：15 项脚本回归测试通过；上游 `v3.8.7`（`7a7430d8a3cf362e23de004a454ddabe651dc778`）的 7 份补丁首次全部应用、再次全部跳过且差异不变；无精确标签时也能选中兼容候选。补丁后 `git diff --check`、Go 语法和格式检查通过，并在 Windows/amd64、Go 1.26.5、CGO 开启时执行 `go test -run '^$' -tags 'fts5 sqlcipher' ./api ./model ./mobile ./conf ./util`，五个包均通过编译检查；未执行各平台完整打包。
