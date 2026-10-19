@@ -44,3 +44,15 @@ bash scripts/apply-patches.sh /path/to/siyuan
 `docker-build-assets.patch` 在前端构建阶段将 `kernel/av/` 复制到 `/kernel/av/`，保留该导入路径对应的目录结构。复制整个目录也兼容尚未引入农历 JSON 的旧版本。该补丁通过现有应用脚本自动应用，不需要修改各平台的构建命令。
 
 验证：15 项脚本测试通过；`v3.8.7` 全部 8 份补丁应用成功，重复执行无新增差异，补丁后 `git diff --check` 通过；新补丁也在 `v3.8.5`、`v3.8.6` 的实际 Dockerfile 上通过应用和重复执行检查。按 `node-build` 的目录布局复现 JSON 模块缺失后，新增 COPY 可让相同的相对导入正确解析 1901–2100 年的数据。本机未安装 Docker，未执行完整镜像构建。
+
+## Docker OCR 原生构建工具
+
+`v3.8.7` 在 Alpine 中从源码构建 ONNX Runtime，CMake 使用 `patch` 命令修补 Eigen 等依赖。上游 Dockerfile 未安装该工具，导致 `Could NOT find Patch` 和 `Patch_EXECUTABLE-NOTFOUND`，在依赖配置阶段退出。
+
+`docker-build-tools.patch` 在 `go-build` 阶段安装 Alpine 的 `patch` 包；`ocr-build` 从该阶段继承工具，最终运行镜像不包含新增的构建工具。该补丁也能用于尚未包含 OCR 阶段的旧版 Dockerfile。Docker 构建任务的时限调整为 90 分钟，为新增的 ONNX Runtime 原生编译保留时间。
+
+实际编译还发现，固定提交的 ONNX Runtime 在 Release 构建中仍无条件包含 musl 未提供的 `execinfo.h`。`patches/onnxruntime/musl-release-stacktrace.patch` 让该头文件与已经受 `NDEBUG` 限制的回溯代码保持一致；Release 下本来就不生成回溯，因此不改变推理行为。Docker 任务仅在存在 `ocr-build` 阶段时应用 `patches/siyuan-docker/onnxruntime-musl.patch` 并复制原生补丁到构建上下文，在编译 ONNX Runtime 前执行；没有 OCR 阶段的旧版跳过此步骤。
+
+上游的 `--skip_tests` 只跳过执行，仍默认编译单元测试和性能测试程序；其中性能测试程序在 GCC 15 上因缺少 `int64_t` 声明而失败。Docker 专用补丁设置 `onnxruntime_BUILD_UNIT_TESTS=OFF`，发布镜像只构建所需运行库及依赖，不构建这些测试程序。
+
+2026-10-19 验证：15 项脚本测试通过；9 份通用补丁及 Docker 专用补丁的应用和重复执行检查通过，修改后的 Dockerfile 和 ONNX Runtime 源码空白检查通过。在失败日志对应的 Alpine 3.24.2 基础镜像中，使用同一 ONNX Runtime 提交完成依赖配置和 Release 共享库编译，并使用日志中的 Go 镜像工具链完成 OCR 辅助进程编译。另在仅安装最终镜像运行依赖的 Alpine 环境中，成功加载 ONNX Runtime 1.24.3、创建 API 23 环境，并确认辅助进程可以启动和处理 JSON 请求。未执行完整 Docker 镜像导出和实际 OCR 模型推理。

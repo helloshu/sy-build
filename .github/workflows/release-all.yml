@@ -985,7 +985,8 @@ jobs:
     needs: [check-version, check-patches]
     if: needs.check-version.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # v3.8.7 builds ONNX Runtime from source for the Alpine OCR runtime.
+    timeout-minutes: 90
     steps:
       - name: Free Disk Space (Native Clean)
         run: |
@@ -1001,6 +1002,11 @@ jobs:
           git clone --branch ${{ needs.check-version.outputs.version }} --depth=1 https://github.com/siyuan-note/siyuan.git
           cd siyuan
           bash ${{ github.workspace }}/sy-build/scripts/apply-patches.sh .
+          if grep -q '^FROM go-build AS ocr-build$' Dockerfile; then
+            bash ../sy-build/scripts/apply-patches.sh . ../sy-build/patches/siyuan-docker
+            mkdir -p .sy-build-onnxruntime-patches
+            cp ../sy-build/patches/onnxruntime/*.patch .sy-build-onnxruntime-patches/
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
