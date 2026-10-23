@@ -37,6 +37,21 @@ bash scripts/apply-patches.sh /path/to/siyuan
 
 2026-10-16 本地验证：15 项脚本回归测试通过；上游 `v3.8.7`（`7a7430d8a3cf362e23de004a454ddabe651dc778`）的 7 份补丁首次全部应用、再次全部跳过且差异不变；无精确标签时也能选中兼容候选。补丁后 `git diff --check`、Go 语法和格式检查通过，并在 Windows/amd64、Go 1.26.5、CGO 开启时执行 `go test -run '^$' -tags 'fts5 sqlcipher' ./api ./model ./mobile ./conf ./util`，五个包均通过编译检查；未执行各平台完整打包。
 
+## v3.8.8 同步流程适配
+
+`v3.8.8` 将 `autoSyncErrCount` 改为 `atomic.Int32`，自动同步失败过多的拦截移入 `notifyAutoSyncPaused()`，`syncData` 改为返回 `error`。三处改动使全部 `sync-diagnostic.patch` 候选在 `kernel/model/sync.go` 上失效，其余补丁仍能匹配现有候选（`disable-update` 与 `zz-disable-official-services` 继续选用 `v3.8.7` 版本）。
+
+`versions/v3.8.8/sync-diagnostic.patch` 保留原有诊断日志、第三方同步免官方账号、订阅提醒空用户保护，调整如下：
+
+- `syncModeGateLogged` 改为在 `syncProviderEndpointPresent()` 前单独声明，不再改写上游的 `var (...)` 块，降低以后变量块变化导致的失效风险。
+- `syncData` 保持上游的命名返回值 `err`，诊断日志记录 `syncDataLocked` 的结果后原样返回；发生 panic 时仍保持上游的“sync did not complete”错误。
+- 自动同步暂停日志改为在 `notifyAutoSyncPaused()` 返回 true 后记录 `autoSyncErrCount.Load()`，上游的提示和 64 分钟延迟逻辑不变。
+- 补丁以 1 行上下文生成，避免与官方服务补丁的改动区域重叠，确保第二次运行时反向检查能识别已应用状态。
+
+旧候选全部保留，`v3.8.5`、`v3.8.7` 仍分别选中原有补丁。
+
+2026-10-23 本地验证：15 项脚本回归测试通过。上游 `v3.8.8`（`bfe36100477b7bbd66db1a8b8cff5547b2ccdb59`）、`v3.8.7`、`v3.8.5` 的 9 份补丁首次全部应用、再次全部跳过且差异不变，`git diff --check` 与 `gofmt` 通过；`v3.8.8`、`v3.8.7` 去掉标签后也能选中兼容候选。在 Linux/amd64、Go 1.26.5 下对补丁后的 `v3.8.8` 执行 `go test -run '^$' -tags 'fts5 sqlcipher' ./api ./model ./mobile ./conf ./util`，五个包均通过编译检查。上游 `model` 包的 `Sync|Exit` 测试中有 3 项失败，均为补丁有意改变的行为：默认同步服务改为 S3、无官方账号时允许第三方同步、官方云服务被禁用。未执行各平台完整打包。
+
 ## Docker 前端共享数据
 
 `v3.8.7` 的 `app/src/protyle/render/av/lunarCalendar.ts` 从 `kernel/av/lunar_calendar_data.json` 导入农历数据。上游 Dockerfile 的 `node-build` 阶段只复制了 `app/`，即使 `go-build` 阶段已有 `kernel/`，前端编译仍会报模块不存在，因为两个阶段的文件系统相互独立。

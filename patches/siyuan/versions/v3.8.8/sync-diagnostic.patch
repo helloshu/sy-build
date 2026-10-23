@@ -1,0 +1,209 @@
+diff --git a/kernel/api/sync.go b/kernel/api/sync.go
+--- a/kernel/api/sync.go
++++ b/kernel/api/sync.go
+@@ -417,2 +417,4 @@ func performSyncContract(c *gin.Context, request apicontract.PerformSyncRequest)
+ 
++	logging.LogInfof("[sync-diag] performSync request received")
++
+ 	// Android 端前后台切换时自动触发同步 https://github.com/siyuan-note/siyuan/issues/7122
+@@ -421,5 +423,8 @@ func performSyncContract(c *gin.Context, request apicontract.PerformSyncRequest)
+ 		if !util.IsBooted() {
++			logging.LogWarnf("[sync-diag] performSync skipped [reason=kernel-not-booted, mobileSwitch=true]")
+ 			return
+ 		}
+-		if nil == model.Conf.GetUser() || !confSyncSnapshot.Enabled {
++		userRequired := conf.ProviderSiYuan == confSyncSnapshot.Provider
++		if (userRequired && nil == model.Conf.GetUser()) || !confSyncSnapshot.Enabled {
++			logging.LogWarnf("[sync-diag] performSync skipped [reason=mobile-switch-gate, userRequired=%t, userPresent=%t, enabled=%t, provider=%d]", userRequired, nil != model.Conf.GetUser(), confSyncSnapshot.Enabled, confSyncSnapshot.Provider)
+ 			return
+@@ -429,3 +434,5 @@ func performSyncContract(c *gin.Context, request apicontract.PerformSyncRequest)
+ 	if 3 != confSyncSnapshot.Mode {
++		logging.LogInfof("[sync-diag] performSync dispatch [mode=%d, mobileSwitch=%t, direction=automatic]", confSyncSnapshot.Mode, mobileSwitch)
+ 		model.SyncData(true)
++		logging.LogInfof("[sync-diag] performSync returned [direction=automatic]")
+ 		return
+@@ -436,4 +443,6 @@ func performSyncContract(c *gin.Context, request apicontract.PerformSyncRequest)
+ 	if err != nil {
++		logging.LogWarnf("[sync-diag] performSync skipped [reason=invalid-upload]")
+ 		return apicontract.Failure[apicontract.Null](-1, err.Error())
+ 	}
++	logging.LogInfof("[sync-diag] performSync dispatch [mode=%d, mobileSwitch=%t, upload=%t]", confSyncSnapshot.Mode, mobileSwitch, upload)
+ 	if upload {
+@@ -443,2 +452,3 @@ func performSyncContract(c *gin.Context, request apicontract.PerformSyncRequest)
+ 	}
++	logging.LogInfof("[sync-diag] performSync returned [upload=%t]", upload)
+ 	return
+diff --git a/kernel/model/cloud_service.go b/kernel/model/cloud_service.go
+--- a/kernel/model/cloud_service.go
++++ b/kernel/model/cloud_service.go
+@@ -298,4 +298,10 @@ func refreshSubscriptionExpirationRemind() {
+ 
+-	if IsSubscriber() && -1 != Conf.GetUser().UserSiYuanProExpireTime {
+-		expired := int64(Conf.GetUser().UserSiYuanProExpireTime)
++	u := Conf.GetUser()
++	if nil == u {
++		logging.LogInfof("[sync-diag] subscription reminder skipped [reason=user-unavailable]")
++		return
++	}
++
++	if IsSubscriber() && -1 != u.UserSiYuanProExpireTime {
++		expired := int64(u.UserSiYuanProExpireTime)
+ 		now := time.Now().UnixMilli()
+@@ -309,3 +315,3 @@ func refreshSubscriptionExpirationRemind() {
+ 		expireDay := 15 // 付费订阅提前 15 天提醒
+-		if 2 == Conf.GetUser().UserSiYuanSubscriptionPlan {
++		if 2 == u.UserSiYuanSubscriptionPlan {
+ 			expireDay = 3 // 试用订阅提前 3 天提醒
+diff --git a/kernel/model/sync.go b/kernel/model/sync.go
+--- a/kernel/model/sync.go
++++ b/kernel/model/sync.go
+@@ -51,3 +51,5 @@ func SyncDataDownload() (err error) {
+ 
++	logging.LogInfof("[sync-diag] manual sync entered [direction=download, provider=%d, endpointPresent=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent())
+ 	if !checkSync(false, false, true) {
++		logging.LogWarnf("[sync-diag] manual sync stopped [direction=download, stage=checkSync]")
+ 		return
+@@ -55,3 +57,5 @@ func SyncDataDownload() (err error) {
+ 
++	logging.LogInfof("[sync-diag] sync lock waiting [direction=download]")
+ 	unlock, ok := lockSyncRequest(&syncDownloadRequests)
++	logging.LogInfof("[sync-diag] sync lock returned [direction=download, accepted=%t]", ok)
+ 	if !ok {
+@@ -60,3 +64,5 @@ func SyncDataDownload() (err error) {
+ 	defer unlock()
++	logging.LogInfof("[sync-diag] provider operation started [direction=download, provider=%d, endpointPresent=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent())
+ 	err = syncDataDownloadLocked()
++	logging.LogInfof("[sync-diag] provider operation returned [direction=download, provider=%d, endpointPresent=%t, success=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent(), nil == err)
+ 	return
+@@ -126,3 +132,5 @@ func SyncDataUpload() (err error) {
+ 
++	logging.LogInfof("[sync-diag] manual sync entered [direction=upload, provider=%d, endpointPresent=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent())
+ 	if !checkSync(false, false, true) {
++		logging.LogWarnf("[sync-diag] manual sync stopped [direction=upload, stage=checkSync]")
+ 		return
+@@ -130,3 +138,5 @@ func SyncDataUpload() (err error) {
+ 
++	logging.LogInfof("[sync-diag] sync lock waiting [direction=upload]")
+ 	unlock, ok := lockSyncRequest(&syncUploadRequests)
++	logging.LogInfof("[sync-diag] sync lock returned [direction=upload, accepted=%t]", ok)
+ 	if !ok {
+@@ -141,3 +151,5 @@ func SyncDataUpload() (err error) {
+ 
++	logging.LogInfof("[sync-diag] provider operation started [direction=upload, provider=%d, endpointPresent=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent())
+ 	err = syncRepoUploadWithDNSRetry()
++	logging.LogInfof("[sync-diag] provider operation returned [direction=upload, provider=%d, endpointPresent=%t, success=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent(), nil == err)
+ 	code := 1
+@@ -309,3 +321,9 @@ func syncData(exit, byHand bool) (err error) {
+ 
++	if byHand {
++		logging.LogInfof("[sync-diag] manual sync entered [direction=automatic, provider=%d, endpointPresent=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent())
++	}
+ 	if !checkSync(false, exit, byHand) {
++		if byHand {
++			logging.LogWarnf("[sync-diag] manual sync stopped [direction=automatic, stage=checkSync]")
++		}
+ 		return nil
+@@ -319,3 +337,9 @@ func syncData(exit, byHand bool) (err error) {
+ 	}
++	if byHand {
++		logging.LogInfof("[sync-diag] sync lock waiting [direction=automatic]")
++	}
+ 	unlock, ok := lockSyncRequest(requests)
++	if byHand {
++		logging.LogInfof("[sync-diag] sync lock returned [direction=automatic, accepted=%t]", ok)
++	}
+ 	if !ok {
+@@ -324,3 +348,10 @@ func syncData(exit, byHand bool) (err error) {
+ 	defer unlock()
+-	return syncDataLocked(exit, byHand)
++	if byHand {
++		logging.LogInfof("[sync-diag] provider operation started [direction=automatic, provider=%d, endpointPresent=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent())
++	}
++	err = syncDataLocked(exit, byHand)
++	if byHand {
++		logging.LogInfof("[sync-diag] provider operation returned [direction=automatic, provider=%d, endpointPresent=%t, success=%t]", Conf.Sync.Load().Provider, syncProviderEndpointPresent(), nil == err)
++	}
++	return err
+ }
+@@ -384,2 +415,5 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	if 2 == confSyncReadSnapshot.Mode && !boot && !exit && !byHand { // 手动模式下只有启动和退出进行同步
++		if syncModeGateLogged.CompareAndSwap(false, true) {
++			logging.LogInfof("[sync-diag] checkSync skipped [reason=mode-gate, mode=%d, boot=%t, exit=%t]", confSyncReadSnapshot.Mode, boot, exit)
++		}
+ 		return false
+@@ -388,4 +422,10 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	if 3 == confSyncReadSnapshot.Mode && !byHand { // 完全手动模式下只有手动进行同步
++		if boot || exit {
++			logging.LogInfof("[sync-diag] checkSync skipped [reason=mode-gate, mode=%d, boot=%t, exit=%t]", confSyncReadSnapshot.Mode, boot, exit)
++		} else if syncModeGateLogged.CompareAndSwap(false, true) {
++			logging.LogInfof("[sync-diag] checkSync skipped [reason=mode-gate, mode=%d, boot=%t, exit=%t]", confSyncReadSnapshot.Mode, boot, exit)
++		}
+ 		return false
+ 	}
++	syncModeGateLogged.Store(false)
+ 
+@@ -393,2 +433,3 @@ func checkSync(boot, exit, byHand bool) bool {
+ 		if byHand {
++			logging.LogWarnf("[sync-diag] checkSync skipped [reason=sync-disabled]")
+ 			util.PushMsg(Conf.Language(124), 5000)
+@@ -400,2 +441,3 @@ func checkSync(boot, exit, byHand bool) bool {
+ 		if byHand {
++			logging.LogWarnf("[sync-diag] checkSync skipped [reason=invalid-cloud-name, cloudNamePresent=%t]", "" != strings.TrimSpace(confSyncReadSnapshot.CloudName))
+ 			util.PushMsg(Conf.Language(123), 5000)
+@@ -404,5 +446,11 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	}
+-	if nil == Conf.GetUser() {
++	if conf.ProviderSiYuan == confSyncReadSnapshot.Provider && nil == Conf.GetUser() {
++		if byHand {
++			logging.LogWarnf("[sync-diag] checkSync skipped [reason=user-unavailable, provider=%d, endpointPresent=%t]", confSyncReadSnapshot.Provider, syncProviderEndpointPresent())
++		}
+ 		return false
+ 	}
++	if byHand && nil == Conf.GetUser() {
++		logging.LogInfof("[sync-diag] checkSync account gate bypassed [provider=%d, endpointPresent=%t]", confSyncReadSnapshot.Provider, syncProviderEndpointPresent())
++	}
+ 
+@@ -411,2 +459,5 @@ func checkSync(boot, exit, byHand bool) bool {
+ 		if !IsSubscriber() {
++			if byHand {
++				logging.LogWarnf("[sync-diag] checkSync skipped [reason=subscription-gate, provider=%d]", confSyncReadSnapshot.Provider)
++			}
+ 			UpdateSyncConf(func(s *conf.Sync) { s.Enabled = false })
+@@ -416,2 +467,5 @@ func checkSync(boot, exit, byHand bool) bool {
+ 		if !IsPaidUser() {
++			if byHand {
++				logging.LogWarnf("[sync-diag] checkSync skipped [reason=paid-user-gate, provider=%d, endpointPresent=%t]", confSyncReadSnapshot.Provider, syncProviderEndpointPresent())
++			}
+ 			UpdateSyncConf(func(s *conf.Sync) { s.Enabled = false })
+@@ -422,2 +476,3 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	if !byHand && !exit && notifyAutoSyncPaused() {
++		logging.LogWarnf("[sync-diag] checkSync skipped [reason=auto-error-limit, errorCount=%d]", autoSyncErrCount.Load())
+ 		planSyncAfter(64 * time.Minute)
+@@ -425,2 +480,5 @@ func checkSync(boot, exit, byHand bool) bool {
+ 	}
++	if byHand {
++		logging.LogInfof("[sync-diag] checkSync passed [mode=%d, provider=%d, endpointPresent=%t]", confSyncReadSnapshot.Mode, confSyncReadSnapshot.Provider, syncProviderEndpointPresent())
++	}
+ 	return true
+@@ -428,2 +486,21 @@ func checkSync(boot, exit, byHand bool) bool {
+ 
++// syncModeGateLogged 避免自动同步周期内重复记录同一同步模式拦截。
++var syncModeGateLogged atomic.Bool
++
++func syncProviderEndpointPresent() bool {
++	confSyncReadSnapshot := Conf.LoadSync()
++
++	switch confSyncReadSnapshot.Provider {
++	case conf.ProviderSiYuan:
++		return "" != strings.TrimSpace(util.GetCloudSyncServer())
++	case conf.ProviderS3:
++		return nil != confSyncReadSnapshot.S3 && "" != strings.TrimSpace(confSyncReadSnapshot.S3.Endpoint)
++	case conf.ProviderWebDAV:
++		return nil != confSyncReadSnapshot.WebDAV && "" != strings.TrimSpace(confSyncReadSnapshot.WebDAV.Endpoint)
++	case conf.ProviderLocal:
++		return nil != confSyncReadSnapshot.Local && "" != strings.TrimSpace(confSyncReadSnapshot.Local.Endpoint)
++	}
++	return false
++}
++
+ // incReindex 增量重建索引。
