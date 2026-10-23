@@ -368,15 +368,3 @@ index 73fbe78..4313797 100644
 +
  var (
  	RhyCacheDuration = int64(3600 * 6)
- 
-@@ -51,6 +53,10 @@ func RefreshRhyResultJob() {
- }
- 
- func GetRhyResult(ctx context.Context, force bool) (map[string]any, error) {
-+	if OfficialCloudServicesDisabled {
-+		return map[string]any{}, nil
-+	}
-+
- 	if ContainerDocker == Container {
- 		RhyCacheDuration = int64(3600 * 24)
- 	}

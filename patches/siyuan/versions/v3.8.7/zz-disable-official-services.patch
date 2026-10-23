@@ -235,10 +235,3 @@ diff --git a/kernel/util/rhy.go b/kernel/util/rhy.go
 +const OfficialCloudServicesDisabled = true
 +
  var (
-@@ -53,2 +55,6 @@
- func GetRhyResult(ctx context.Context, force bool) (map[string]any, error) {
-+	if OfficialCloudServicesDisabled {
-+		return map[string]any{}, nil
-+	}
-+
- 	cacheDuration := RhyCacheDuration
