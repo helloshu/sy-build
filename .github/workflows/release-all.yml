@@ -859,7 +859,7 @@ jobs:
         run: |
           PATCH="${{ github.workspace }}/sy-build/patches/siyuan-ios/nsitemprovider-loaditem-void.patch"
           SOURCE="ShorthandShare/ShareViewController.swift"
-          if git apply --check "$PATCH"; then
+          if git apply --check "$PATCH" 2>/dev/null; then
             git apply --ignore-whitespace "$PATCH"
             echo "Applied NSItemProvider.loadItem compatibility patch."
           elif grep -q 'let progress = provider.loadItem(' "$SOURCE"; then
@@ -867,6 +867,12 @@ jobs:
             exit 1
           else
             echo "Upstream no longer needs the NSItemProvider.loadItem compatibility patch."
+          fi
+
+          AVAILABLE_PATCH="${{ github.workspace }}/sy-build/patches/siyuan-ios/text-menu-interaction-available.patch"
+          if git apply --check "$AVAILABLE_PATCH" 2>/dev/null; then
+            git apply --ignore-whitespace "$AVAILABLE_PATCH"
+            echo "Applied textMenuInteraction @available stored property compatibility patch."
           fi
 
       - name: Apply unlock patches

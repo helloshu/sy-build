@@ -1,0 +1,22 @@
+diff --git a/siyuan-ios/ViewController.swift b/siyuan-ios/ViewController.swift
+index 84d9762..a470ee6 100644
+--- a/siyuan-ios/ViewController.swift
++++ b/siyuan-ios/ViewController.swift
+@@ -64,8 +64,16 @@ class ViewController: UIViewController, WKNavigationDelegate, UIScrollViewDelega
+   private var textMenuVisible = false
+   private var textMenuRequestGeneration: UInt = 0
+   private var textMenuRect = CGRect.zero
++  private var _textMenuInteraction: Any?
+   @available(iOS 16.0, *)
+-  private lazy var textMenuInteraction = UIEditMenuInteraction(delegate: self)
++  private var textMenuInteraction: UIEditMenuInteraction {
++    if let interaction = _textMenuInteraction as? UIEditMenuInteraction {
++      return interaction
++    }
++    let interaction = UIEditMenuInteraction(delegate: self)
++    _textMenuInteraction = interaction
++    return interaction
++  }
+   private var photoPickerReply: ((Any?, String?) -> Void)?
+   private var photoPickerRequestID: UUID?
+   private var photoPickerTask: Task<Void, Never>?
